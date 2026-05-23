@@ -50,8 +50,8 @@ const initialSampleTransactions = [
 // ─── Desktop Sidebar ──────────────────────────────────────────────
 function DesktopSidebar({ activeTab, onTabChange, onReset, onClearChat }) {
   const navItems = [
-    { id: "chat", label: "Asisten AI", Icon: Sparkles },
     { id: "kas", label: "Buku Kas", Icon: BarChart3 },
+    { id: "chat", label: "Asisten AI", Icon: Sparkles },
   ];
 
   return (
@@ -237,7 +237,7 @@ export default function Home() {
   const [transactions, setTransactions] = useState(initialSampleTransactions);
   const [theme, setTheme] = useState("dark");
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState("chat");
+  const [activeTab, setActiveTab] = useState("kas");
 
   // Ref untuk trigger clear chat dari sidebar desktop
   const [clearChatSignal, setClearChatSignal] = useState(0);
@@ -290,7 +290,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full bg-[#FAF9F6] dark:bg-[#0C0C0B] transition-colors duration-300 font-sans">
-      <Toaster position="top-center" richColors theme={theme === "dark" ? "dark" : "light"} />
+      <Toaster
+        position="top-center"
+        richColors
+        theme={theme === "dark" ? "dark" : "light"}
+      />
       <Navbar theme={theme} onToggleTheme={toggleTheme} activeTab={activeTab} />
 
       {/* ── Mobile & Tablet (<1024px): full-width, bottom nav ── */}
@@ -320,8 +324,8 @@ export default function Home() {
         {/* Bottom nav */}
         <div className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around">
           {[
-            { id: "chat", label: "Asisten AI", Icon: Sparkles },
             { id: "kas", label: "Buku Kas", Icon: BarChart3 },
+            { id: "chat", label: "Asisten AI", Icon: Sparkles },
           ].map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -330,11 +334,15 @@ export default function Home() {
                 "flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 active:scale-90",
                 activeTab === id
                   ? "text-emerald-600 dark:text-emerald-400 font-extrabold scale-105"
-                  : "text-zinc-400 dark:text-zinc-500 font-bold"
+                  : "text-zinc-400 dark:text-zinc-500 font-bold",
               )}
             >
-              <Icon className={cn("h-5 w-5", activeTab === id && "animate-pulse")} />
-              <span className="text-[10px] tracking-wide font-extrabold">{label}</span>
+              <Icon
+                className={cn("h-5 w-5", activeTab === id && "animate-pulse")}
+              />
+              <span className="text-[10px] tracking-wide font-extrabold">
+                {label}
+              </span>
             </button>
           ))}
         </div>
@@ -359,10 +367,12 @@ export default function Home() {
         />
 
         <div className="flex flex-1 overflow-hidden">
-          <div className={cn(
-            "flex flex-col border-r border-stone-200/50 dark:border-zinc-800/60 transition-all duration-300",
-            activeTab === "kas" ? "w-0 overflow-hidden opacity-0" : "flex-1"
-          )}>
+          <div
+            className={cn(
+              "flex flex-col border-r border-stone-200/50 dark:border-zinc-800/60 transition-all duration-300",
+              activeTab === "kas" ? "w-0 overflow-hidden opacity-0" : "flex-1",
+            )}
+          >
             <AIAssistant
               onAddTransaction={handleAddTransaction}
               onClearTransactions={handleClearTransactions}
@@ -372,10 +382,12 @@ export default function Home() {
             />
           </div>
 
-          <div className={cn(
-            "flex flex-col overflow-hidden transition-all duration-300",
-            activeTab === "chat" ? "w-0 overflow-hidden opacity-0" : "flex-1"
-          )}>
+          <div
+            className={cn(
+              "flex flex-col overflow-hidden transition-all duration-300",
+              activeTab === "chat" ? "w-0 overflow-hidden opacity-0" : "flex-1",
+            )}
+          >
             <KasPanel
               transactions={transactions}
               totalIncome={totalIncome}

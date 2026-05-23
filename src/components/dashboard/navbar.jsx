@@ -100,11 +100,6 @@ export default function Navbar({ theme, onToggleTheme }) {
               : <Moon className="h-[18px] w-[18px]" />
             }
           </button>
-
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/10 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-            <Sparkles className="h-3.5 w-3.5 animate-pulse shrink-0" />
-            <span className="text-[10px] font-bold tracking-wider uppercase hidden sm:inline">AI Active</span>
-          </div>
         </div>
       </div>
     </header>
