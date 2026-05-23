@@ -294,9 +294,9 @@ export default function Home() {
       <Navbar theme={theme} onToggleTheme={toggleTheme} activeTab={activeTab} />
 
       {/* ── Mobile & Tablet (<1024px): full-width, bottom nav ── */}
-      <div className="lg:hidden flex flex-col min-h-screen pb-[68px] pt-[72px]">
+      <div className="lg:hidden flex flex-col h-screen fixed inset-0 pb-[68px] pt-[72px] overflow-hidden">
         {activeTab === "chat" && (
-          <div className="flex-1 flex flex-col overflow-hidden h-[calc(100vh-72px-68px)]">
+          <div className="flex-1 flex flex-col overflow-hidden">
             <AIAssistant
               onAddTransaction={handleAddTransaction}
               onClearTransactions={handleClearTransactions}
