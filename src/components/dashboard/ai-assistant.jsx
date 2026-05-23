@@ -41,18 +41,23 @@ function buildAiMessage(text, parsedData = null) {
 }
 
 function buildSuccessText(txList) {
+  function qtyLabel(tx) {
+    if (tx.unit) return `${tx.qty}${tx.unit}`; // e.g. "1kg", "500ml"
+    return `${tx.qty} pcs`;
+  }
+
   if (txList.length === 1) {
     const { tx } = txList[0];
     const isIncome = tx.type === "income";
     return isIncome
-      ? `**Pemasukan Berhasil Dicatat!**\n\nPenjualan **${tx.item}** sebanyak **${tx.qty} pcs** senilai **${formatRupiah(tx.amount)}** sudah masuk ke dashboard.`
-      : `**Pengeluaran Berhasil Dicatat!**\n\nBelanja **${tx.item}** senilai **${formatRupiah(tx.amount)}** sudah dicatat.`;
+      ? `**Pemasukan Berhasil Dicatat!**\n\nPenjualan **${tx.item}** sebanyak **${qtyLabel(tx)}** senilai **${formatRupiah(tx.amount)}** sudah masuk ke dashboard.`
+      : `**Pengeluaran Berhasil Dicatat!**\n\nBelanja **${tx.item}** ${tx.unit || tx.qty > 1 ? `sebanyak **${qtyLabel(tx)}** ` : ""}senilai **${formatRupiah(tx.amount)}** sudah dicatat.`;
   }
 
   let text = `**${txList.length} transaksi berhasil dicatat!**\n\n`;
   txList.forEach(({ tx }) => {
     const label = tx.type === "income" ? "Penjualan" : "Pembelian";
-    text += `• **${label} ${tx.item}** — *${formatRupiah(tx.amount)}*\n`;
+    text += `• **${label} ${tx.item}** ${tx.unit || tx.qty > 1 ? `(${qtyLabel(tx)}) ` : ""}— *${formatRupiah(tx.amount)}*\n`;
   });
   return text;
 }
@@ -232,15 +237,22 @@ export default function AIAssistant({
   onAddTransaction,
   onClearTransactions,
   inline = false,
-  clearSignal = 0,   // ← tambah
-  resetSignal = 0,   // ← tambah
+  clearSignal = 0,
+  resetSignal = 0,
+  transactions = [],
+  messages: externalMessages,
+  setMessages: externalSetMessages,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [messages, setMessages] = useState([
+  
+  const [localMessages, setLocalMessages] = useState([
     { ...WELCOME_MESSAGE, timestamp: buildTimestamp() },
   ]);
+
+  const messages = externalMessages || localMessages;
+  const setMessages = externalSetMessages || setLocalMessages;
   const [voiceState, setVoiceState] = useState("idle");
   const [voiceError, setVoiceError] = useState("");
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -342,72 +354,127 @@ export default function AIAssistant({
     setVoiceState("idle");
   };
 
+  // ─── Offline Local Fallback Parser ─────────────────────────────
+  const runFallbackParser = (trimmedText, warningText) => {
+    const segments = splitIntoSegments(trimmedText);
+    if (segments.length === 0) {
+      setMessages((prev) => [
+        ...prev,
+        buildAiMessage(
+          `⚠️ **Peringatan:** ${warningText}\n\n*Asisten berjalan dalam mode offline lokal.*\n\nMaaf Bos, saya belum memahami maksud pencatatan tersebut.\n\nContoh:\n• *"jual kopi 2 gelas 40rb"*\n• *"beli gas LPG 22rb"*`,
+        ),
+      ]);
+      return;
+    }
+
+    const successes = [];
+    const failures = [];
+
+    segments.forEach((seg, i) => {
+      const result = parseTransactionText(seg);
+      if (result.success) {
+        const tx = {
+          id: `${Date.now()}-${i}`,
+          ...result.data,
+          time: buildTimestamp(),
+        };
+        successes.push({ tx, parsedData: result.data });
+      } else {
+        failures.push({ rawText: seg, reason: result.message });
+      }
+    });
+
+    if (successes.length === 0) {
+      setMessages((prev) => [
+        ...prev,
+        buildAiMessage(
+          `⚠️ **Peringatan:** ${warningText}\n\n*Asisten berjalan dalam mode offline lokal.*\n\n` +
+          buildFailText(failures)
+        ),
+      ]);
+      return;
+    }
+
+    successes.forEach(({ tx }) => onAddTransaction(tx));
+
+    let responseText = `⚠️ **Peringatan:** ${warningText}\n\n*Asisten berjalan dalam mode offline lokal.*\n\n` + buildSuccessText(successes);
+    if (failures.length > 0) responseText += `\n\n` + buildFailText(failures);
+
+    setMessages((prev) => [
+      ...prev,
+      buildAiMessage(responseText, successes[0].parsedData),
+    ]);
+  };
+
   // ─── Send Message ─────────────────────────────────────────────
   const handleSend = (text = input) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        sender: "user",
-        text: trimmed,
-        timestamp: buildTimestamp(),
-      },
-    ]);
+    const newMsg = {
+      id: Date.now().toString(),
+      sender: "user",
+      text: trimmed,
+      timestamp: buildTimestamp(),
+    };
+
+    setMessages((prev) => [...prev, newMsg]);
     setInput("");
     setIsTyping(true);
 
-    setTimeout(() => {
-      setIsTyping(false);
+    const chatHistoryForApi = messages.filter((m) => m.id !== "welcome");
 
-      const segments = splitIntoSegments(trimmed);
-      if (segments.length === 0) {
-        setMessages((prev) => [
-          ...prev,
-          buildAiMessage(
-            'Maaf Bos, saya belum memahami maksud pencatatan tersebut.\n\nContoh:\n• *"jual kopi 2 gelas 40rb"*\n• *"beli gas LPG 22rb"*',
-          ),
-        ]);
-        return;
-      }
+    (async () => {
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: trimmed,
+            history: chatHistoryForApi,
+            transactions: transactions,
+          }),
+        });
 
-      const successes = [];
-      const failures = [];
+        const data = await res.json();
+        setIsTyping(false);
 
-      segments.forEach((seg, i) => {
-        const result = parseTransactionText(seg);
-        if (result.success) {
-          const tx = {
-            id: `${Date.now()}-${i}`,
-            ...result.data,
-            time: buildTimestamp(),
-          };
-          successes.push({ tx, parsedData: result.data });
-        } else {
-          failures.push({ rawText: seg, reason: result.message });
+        if (!res.ok) {
+          if (data.error === "GEMINI_API_KEY_MISSING") {
+            runFallbackParser(trimmed, data.message);
+            return;
+          }
+          throw new Error(data.message || "Gagal menghubungkan ke asisten AI");
         }
-      });
 
-      if (successes.length === 0) {
+        const { response, transactions: newTxList = [] } = data;
+
+        if (newTxList.length > 0) {
+          newTxList.forEach((tx, i) => {
+            const preparedTx = {
+              id: `${Date.now()}-${i}`,
+              ...tx,
+              time: buildTimestamp(),
+            };
+            onAddTransaction(preparedTx);
+          });
+        }
+
         setMessages((prev) => [
           ...prev,
-          buildAiMessage(buildFailText(failures)),
+          buildAiMessage(response, newTxList.length > 0 ? newTxList[0] : null),
         ]);
-        return;
+      } catch (err) {
+        console.error(err);
+        setIsTyping(false);
+        setMessages((prev) => [
+          ...prev,
+          buildAiMessage(`❌ **Gagal memproses pesan:** ${err.message || "Terjadi masalah jaringan."}`),
+        ]);
       }
-
-      successes.forEach(({ tx }) => onAddTransaction(tx));
-
-      let responseText = buildSuccessText(successes);
-      if (failures.length > 0) responseText += `\n\n` + buildFailText(failures);
-
-      setMessages((prev) => [
-        ...prev,
-        buildAiMessage(responseText, successes[0].parsedData),
-      ]);
-    }, 850);
+    })();
   };
 
   // ─── Actions ─────────────────────────────────────────────────

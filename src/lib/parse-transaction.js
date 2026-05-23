@@ -7,7 +7,7 @@ const CATEGORY_KEYWORDS = {
   shopping: /gas|minyak|kresek|sabun|belanja|operasional|bahan/i,
   bills: /listrik|air|pulsa|internet|wifi|token|telkom/i,
   salary: /gaji|karyawan|bonus|staf|upah/i,
-  rent: /sewa|kontrak|ruko|lapak/i,
+  rent: /sewa|kontrak|ruko|lapak|kontrakan/i,
 };
 
 function detectCategory(text) {
@@ -71,11 +71,22 @@ function extractMoney(text) {
 }
 
 function extractQtyWithUnit(text) {
+  // Satuan hitung + satuan berat/volume
   const regex =
-    /(\d+)\s*(porsi|pcs|biji|bungkus|buah|gelas|pax|item|box|botol|lembar|piring)/gi;
+    /(\d+(?:[.,]\d+)?)\s*(porsi|pcs|biji|bungkus|buah|gelas|pax|item|box|botol|lembar|piring|kg|kilo|gram|gr|liter|lt|ml|ons|lusin|pack|sachet|kaleng|dus)/gi;
   const match = regex.exec(text);
-  return match ? { qty: parseInt(match[1], 10), fullMatch: match[0] } : null;
+  return match
+    ? {
+        qty: parseFloat(match[1].replace(",", ".")),
+        unit: match[2].toLowerCase(),
+        fullMatch: match[0],
+      }
+    : null;
 }
+
+// Satuan yang mungkin lolos sebagai sisa token di nama item
+const UNIT_TOKENS =
+  /\b(porsi|pcs|biji|bungkus|buah|gelas|pax|item|box|botol|lembar|piring|kg|kilo|gram|gr|liter|lt|ml|ons|lusin|pack|sachet|kaleng|dus)\b/gi;
 
 function extractItemName(text, moneyMatches = [], qtyFullMatch = "") {
   let clean = text
@@ -83,7 +94,13 @@ function extractItemName(text, moneyMatches = [], qtyFullMatch = "") {
       /\b(jual|beli|bayar|belanja|pemasukan|pengeluaran|tambah|catat)\b/gi,
       "",
     )
-    .replace(qtyFullMatch, "");
+    .replace(
+      qtyFullMatch
+        ? new RegExp(qtyFullMatch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi")
+        : /(?:)/g,
+      "",
+    )
+    .replace(UNIT_TOKENS, ""); // hapus sisa satuan berat/volume
 
   moneyMatches.forEach((m) => {
     clean = clean.replace(m.fullMatch, "");
@@ -94,6 +111,7 @@ function extractItemName(text, moneyMatches = [], qtyFullMatch = "") {
   return clean
     ? clean
         .split(" ")
+        .filter((w) => w.length > 0)
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(" ")
     : "Tanpa Keterangan";
@@ -139,6 +157,7 @@ export function parseTransactionText(text) {
 
   let amount = 0;
   let qty = qtyUnit?.qty ?? 1;
+  let unit = qtyUnit?.unit ?? null;
 
   if (moneyResult && moneyResult.amount > 0) {
     amount = moneyResult.amount;
@@ -168,7 +187,10 @@ export function parseTransactionText(text) {
   );
   const category = detectCategory(item.toLowerCase());
 
-  return { success: true, data: { type, item, qty, amount, category } };
+  return {
+    success: true,
+    data: { type, item, qty, unit: qtyUnit?.unit ?? null, amount, category },
+  };
 }
 
 // ─── Split teks input jadi segmen transaksi ──────────────────────

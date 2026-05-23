@@ -16,36 +16,37 @@ import {
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/format";
 import { Toaster, toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
-const initialSampleTransactions = [
-  {
-    id: "tx-1",
-    type: "income",
-    item: "Nasi Goreng Spesial",
-    qty: 5,
-    amount: 100000,
-    category: "food",
-    time: "09:15",
-  },
-  {
-    id: "tx-2",
-    type: "expense",
-    item: "Bahan Baku & Telur",
-    qty: 1,
-    amount: 45000,
-    category: "shopping",
-    time: "10:30",
-  },
-  {
-    id: "tx-3",
-    type: "income",
-    item: "Es Kopi Susu Aren",
-    qty: 2,
-    amount: 30000,
-    category: "food",
-    time: "11:45",
-  },
-];
+// ─── Supabase field mapping ────────────────────────────────────────
+// DB  : id, type, item_name, category, amount, qty, unit, created_at
+// App : id, type, item,      category, amount, qty, unit, time
+function dbToApp(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    item: row.item_name,
+    category: row.category ?? "other",
+    amount: row.amount,
+    qty: row.qty ?? 1,
+    unit: row.unit ?? null,
+    time: new Date(row.created_at).toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+}
+
+function appToDb(tx) {
+  return {
+    type: tx.type,
+    item_name: tx.item,
+    category: tx.category ?? "other",
+    amount: tx.amount,
+    qty: tx.qty ?? 1,
+    unit: tx.unit ?? null,
+  };
+}
 
 // ─── Desktop Sidebar ──────────────────────────────────────────────
 function DesktopSidebar({ activeTab, onTabChange, onReset, onClearChat }) {
@@ -104,6 +105,7 @@ function DesktopSidebar({ activeTab, onTabChange, onReset, onClearChat }) {
 // ─── Kas Panel (reusable di desktop kanan + mobile tab) ───────────
 function KasPanel({
   transactions,
+  loading = false,
   totalIncome,
   totalExpense,
   totalProfit,
@@ -118,82 +120,101 @@ function KasPanel({
 
   return (
     <div className="flex-1 overflow-y-auto px-4 lg:px-6 py-6 space-y-5">
-      {/* Stats */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-extrabold tracking-wider uppercase text-zinc-400 dark:text-zinc-500">
-            Arus Kas Toko
-          </h3>
-          <div className="flex items-center gap-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Live Sync
-          </div>
-        </div>
-        <div className="flex overflow-x-auto lg:overflow-x-visible snap-x snap-mandatory lg:snap-none gap-3.5 pb-3 -mx-4 lg:mx-0 px-4 lg:px-0 scrollbar-none lg:grid lg:grid-cols-3">
-          <StatsCard
-            title="Pemasukan Toko"
-            value={totalIncome}
-            description="Uang masuk dari penjualan."
-            type="income"
-          />
-          <StatsCard
-            title="Pengeluaran"
-            value={totalExpense}
-            description="Uang keluar operasional."
-            type="expense"
-          />
-          <StatsCard
-            title="Untung Bersih"
-            value={totalProfit}
-            description="Sisa keuntungan bersih."
-            type="profit"
-          />
-        </div>
-      </div>
-
-      {/* AI Insights */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-extrabold tracking-wider uppercase text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
-          <BrainCircuit className="h-3.5 w-3.5 text-indigo-500" />
-          Analisis Keuangan AI
-        </h3>
-        {aiInsights.length === 0 ? (
-          <div className="p-5 rounded-2xl border border-dashed border-stone-200 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-900/10 flex flex-col items-center justify-center text-center">
-            <BrainCircuit className="h-5 w-5 text-zinc-400 dark:text-zinc-600 mb-3" />
-            <h4 className="text-xs font-bold text-zinc-900 dark:text-white">
-              Analisis Belum Tersedia
-            </h4>
-            <p className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-medium max-w-[240px]">
-              Catat beberapa transaksi agar AI dapat menganalisis kinerja bisnis
-              Bos.
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-stone-150 dark:border-zinc-900/60 bg-white dark:bg-zinc-900/40 p-4 space-y-3">
-            {aiInsights.map((insight) => (
-              <div key={insight.id} className="flex items-start gap-2.5">
-                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-stone-50 dark:bg-zinc-900 border border-stone-150 dark:border-zinc-800 shrink-0 mt-0.5">
-                  {insight.icon}
-                </div>
-                <p
-                  className="text-xs text-zinc-700 dark:text-zinc-300 font-semibold leading-relaxed"
-                  dangerouslySetInnerHTML={{
-                    __html: insight.text.replace(
-                      /\*\*(.*?)\*\*/g,
-                      '<strong class="font-extrabold text-zinc-900 dark:text-white">$1</strong>',
-                    ),
-                  }}
-                />
-              </div>
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="space-y-3 animate-pulse">
+          <div className="h-3 w-24 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+          <div className="grid grid-cols-3 gap-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-20 rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
             ))}
           </div>
-        )}
-      </div>
+          <div className="h-3 w-32 rounded-full bg-zinc-200 dark:bg-zinc-800 mt-4" />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-14 rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
+          ))}
+        </div>
+      )}
 
-      <RecentTransactions
-        transactions={transactions}
-        onDeleteTransaction={onDeleteTransaction}
-      />
+      {!loading && (
+        <>
+          {/* Stats */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-extrabold tracking-wider uppercase text-zinc-400 dark:text-zinc-500">
+                Arus Kas Toko
+              </h3>
+              <div className="flex items-center gap-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Sync
+              </div>
+            </div>
+            <div className="flex overflow-x-auto lg:overflow-x-visible snap-x snap-mandatory lg:snap-none gap-3.5 pb-3 -mx-4 lg:mx-0 px-4 lg:px-0 scrollbar-none lg:grid lg:grid-cols-3">
+              <StatsCard
+                title="Pemasukan Toko"
+                value={totalIncome}
+                description="Uang masuk dari penjualan."
+                type="income"
+              />
+              <StatsCard
+                title="Pengeluaran"
+                value={totalExpense}
+                description="Uang keluar operasional."
+                type="expense"
+              />
+              <StatsCard
+                title="Untung Bersih"
+                value={totalProfit}
+                description="Sisa keuntungan bersih."
+                type="profit"
+              />
+            </div>
+          </div>
+
+          {/* AI Insights */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-extrabold tracking-wider uppercase text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
+              <BrainCircuit className="h-3.5 w-3.5 text-indigo-500" />
+              Analisis Keuangan AI
+            </h3>
+            {aiInsights.length === 0 ? (
+              <div className="p-5 rounded-2xl border border-dashed border-stone-200 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-900/10 flex flex-col items-center justify-center text-center">
+                <BrainCircuit className="h-5 w-5 text-zinc-400 dark:text-zinc-600 mb-3" />
+                <h4 className="text-xs font-bold text-zinc-900 dark:text-white">
+                  Analisis Belum Tersedia
+                </h4>
+                <p className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-medium max-w-[240px]">
+                  Catat beberapa transaksi agar AI dapat menganalisis kinerja bisnis Bos.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-stone-150 dark:border-zinc-900/60 bg-white dark:bg-zinc-900/40 p-4 space-y-3">
+                {aiInsights.map((insight) => (
+                  <div key={insight.id} className="flex items-start gap-2.5">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-stone-50 dark:bg-zinc-900 border border-stone-150 dark:border-zinc-800 shrink-0 mt-0.5">
+                      {insight.icon}
+                    </div>
+                    <p
+                      className="text-xs text-zinc-700 dark:text-zinc-300 font-semibold leading-relaxed"
+                      dangerouslySetInnerHTML={{
+                        __html: insight.text.replace(
+                          /\*\*(.*?)\*\*/g,
+                          '<strong class="font-extrabold text-zinc-900 dark:text-white">$1</strong>',
+                        ),
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <RecentTransactions
+            transactions={transactions}
+            onDeleteTransaction={onDeleteTransaction}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -234,20 +255,51 @@ function buildInsights(totalIncome, totalExpense, totalProfit, transactions) {
 
 // ─── Page ─────────────────────────────────────────────────────────
 export default function Home() {
-  const [transactions, setTransactions] = useState(initialSampleTransactions);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("dark");
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("kas");
 
-  // Ref untuk trigger clear chat dari sidebar desktop
+  // Trigger clear/reset chat dari sidebar desktop
   const [clearChatSignal, setClearChatSignal] = useState(0);
   const [resetSignal, setResetSignal] = useState(0);
 
+  // Shared chat messages state so history is preserved between mobile/desktop viewport resizing
+  const [chatMessages, setChatMessages] = useState(() => [
+    {
+      id: "welcome",
+      sender: "ai",
+      text: 'Halo Bos!\n\nSaya **Catetin AI**, asisten keuangan pribadi tokomu. Bos bisa catat penjualan atau pengeluaran toko langsung di sini.\n\nContoh:\n• *"jual kopi susu 5 porsi 75 ribu"*\n• *"beli gas LPG 22rb"*\n• *"bayar tagihan listrik 150 ribu"*',
+      timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+    }
+  ]);
+
+  // ── Theme init ──────────────────────────────────────────────────
   useEffect(() => {
     setMounted(true);
     const saved = localStorage.getItem("catetin-theme") || "dark";
     setTheme(saved);
     document.documentElement.classList.toggle("dark", saved === "dark");
+  }, []);
+
+  // ── Load transactions dari Supabase ─────────────────────────────
+  useEffect(() => {
+    async function fetchTransactions() {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        toast.error("Gagal memuat data", { description: error.message });
+      } else {
+        setTransactions((data ?? []).map(dbToApp));
+      }
+      setLoading(false);
+    }
+    fetchTransactions();
   }, []);
 
   const toggleTheme = () => {
@@ -257,15 +309,40 @@ export default function Home() {
     document.documentElement.classList.toggle("dark", next === "dark");
   };
 
-  const handleAddTransaction = (newTx) => {
-    setTransactions((prev) => [newTx, ...prev]);
+  // ── Add transaction → INSERT ─────────────────────────────────────
+  const handleAddTransaction = async (newTx) => {
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert([appToDb(newTx)])
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Gagal menyimpan transaksi", { description: error.message });
+      return;
+    }
+
+    setTransactions((prev) => [dbToApp(data), ...prev]);
     toast.success("Catatan berhasil disimpan", {
-      description: `${newTx.type === "income" ? "Pemasukan" : "Pengeluaran"}: ${newTx.item} (${formatRupiah(newTx.amount)})`,
+      description: `${
+        newTx.type === "income" ? "Pemasukan" : "Pengeluaran"
+      }: ${newTx.item} (${formatRupiah(newTx.amount)})`,
     });
   };
 
-  const handleDeleteTransaction = (id) => {
+  // ── Delete transaction → DELETE ──────────────────────────────────
+  const handleDeleteTransaction = async (id) => {
     const tx = transactions.find((t) => t.id === id);
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Gagal menghapus transaksi", { description: error.message });
+      return;
+    }
+
     setTransactions((prev) => prev.filter((t) => t.id !== id));
     if (tx)
       toast.error("Transaksi dihapus", {
@@ -273,7 +350,18 @@ export default function Home() {
       });
   };
 
-  const handleClearTransactions = () => {
+  // ── Clear all → DELETE all ───────────────────────────────────────
+  const handleClearTransactions = async () => {
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .neq("id", 0); // hapus semua baris
+
+    if (error) {
+      toast.error("Gagal mereset data", { description: error.message });
+      return;
+    }
+
     setTransactions([]);
     toast.info("Buku Kas berhasil dikosongkan");
   };
@@ -307,6 +395,9 @@ export default function Home() {
               inline
               clearSignal={clearChatSignal}
               resetSignal={resetSignal}
+              transactions={transactions}
+              messages={chatMessages}
+              setMessages={setChatMessages}
             />
           </div>
         )}
@@ -314,6 +405,7 @@ export default function Home() {
         {activeTab === "kas" && (
           <KasPanel
             transactions={transactions}
+            loading={loading}
             totalIncome={totalIncome}
             totalExpense={totalExpense}
             totalProfit={totalProfit}
@@ -379,6 +471,9 @@ export default function Home() {
               inline
               clearSignal={clearChatSignal}
               resetSignal={resetSignal}
+              transactions={transactions}
+              messages={chatMessages}
+              setMessages={setChatMessages}
             />
           </div>
 
@@ -390,6 +485,7 @@ export default function Home() {
           >
             <KasPanel
               transactions={transactions}
+              loading={loading}
               totalIncome={totalIncome}
               totalExpense={totalExpense}
               totalProfit={totalProfit}

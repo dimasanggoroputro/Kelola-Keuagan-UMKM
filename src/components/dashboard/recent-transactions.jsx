@@ -101,11 +101,12 @@ function TransactionRow({ tx, onDelete }) {
             <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">
               {label}
             </span>
-            {tx.qty > 1 && (
+            {/* Tampilkan qty+unit: "1kg", "10kg", "2 pcs" — sembunyikan kalau qty=1 tanpa unit */}
+            {(tx.unit || tx.qty > 1) && (
               <>
                 <span className="text-[9px] text-zinc-300 dark:text-zinc-700">•</span>
                 <span className="text-[9px] font-extrabold text-zinc-400 dark:text-zinc-500">
-                  {tx.qty} Pcs
+                  {tx.unit ? `${tx.qty}${tx.unit}` : `${tx.qty} pcs`}
                 </span>
               </>
             )}
