@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send, Mic, RefreshCw, Trash2 } from "lucide-react";
+import { Sparkles, X, Send, Mic, RefreshCw, Trash2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/format";
 import {
@@ -246,6 +246,8 @@ export default function AIAssistant({
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  // Toggle: true = pakai Gemini AI, false = parser lokal (manual)
+  const [useAI, setUseAI] = useState(true);
   
   const [localMessages, setLocalMessages] = useState([
     { ...WELCOME_MESSAGE, timestamp: buildTimestamp() },
@@ -354,14 +356,20 @@ export default function AIAssistant({
     setVoiceState("idle");
   };
 
-  // ─── Offline Local Fallback Parser ─────────────────────────────
+  // ─── Local Parser (dipakai saat manual mode ATAU AI rate-limit) ──
+  // warningText: string = tampilkan peringatan AI, null = mode manual (tanpa peringatan)
   const runFallbackParser = (trimmedText, warningText) => {
     const segments = splitIntoSegments(trimmedText);
+    const prefix = warningText
+      ? `⚠️ **Peringatan:** ${warningText}\n\n*Asisten berjalan dalam mode offline lokal.*\n\n`
+      : "";
+
     if (segments.length === 0) {
       setMessages((prev) => [
         ...prev,
         buildAiMessage(
-          `⚠️ **Peringatan:** ${warningText}\n\n*Asisten berjalan dalam mode offline lokal.*\n\nMaaf Bos, saya belum memahami maksud pencatatan tersebut.\n\nContoh:\n• *"jual kopi 2 gelas 40rb"*\n• *"beli gas LPG 22rb"*`,
+          prefix +
+          `Maaf Bos, saya belum memahami maksud pencatatan tersebut.\n\nContoh:\n• *"jual kopi 2 gelas 40rb"*\n• *"beli gas LPG 22rb"*`,
         ),
       ]);
       return;
@@ -387,17 +395,14 @@ export default function AIAssistant({
     if (successes.length === 0) {
       setMessages((prev) => [
         ...prev,
-        buildAiMessage(
-          `⚠️ **Peringatan:** ${warningText}\n\n*Asisten berjalan dalam mode offline lokal.*\n\n` +
-          buildFailText(failures)
-        ),
+        buildAiMessage(prefix + buildFailText(failures)),
       ]);
       return;
     }
 
     successes.forEach(({ tx }) => onAddTransaction(tx));
 
-    let responseText = `⚠️ **Peringatan:** ${warningText}\n\n*Asisten berjalan dalam mode offline lokal.*\n\n` + buildSuccessText(successes);
+    let responseText = prefix + buildSuccessText(successes);
     if (failures.length > 0) responseText += `\n\n` + buildFailText(failures);
 
     setMessages((prev) => [
@@ -420,17 +425,22 @@ export default function AIAssistant({
 
     setMessages((prev) => [...prev, newMsg]);
     setInput("");
-    setIsTyping(true);
 
+    // ── Mode Manual: langsung pakai parser lokal, tanpa API call ──
+    if (!useAI) {
+      runFallbackParser(trimmed, null);
+      return;
+    }
+
+    // ── Mode AI: kirim ke Gemini API ──────────────────────────────
+    setIsTyping(true);
     const chatHistoryForApi = messages.filter((m) => m.id !== "welcome");
 
     (async () => {
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: trimmed,
             history: chatHistoryForApi,
@@ -446,6 +456,20 @@ export default function AIAssistant({
             runFallbackParser(trimmed, data.message);
             return;
           }
+
+          // ── Rate limit: tampilkan pesan ramah + auto-switch manual ──
+          if (data.error === "RATE_LIMIT_EXCEEDED") {
+            const retryAfter = data.retryAfter || 60;
+            setUseAI(false); // otomatis pindah ke mode manual
+            setMessages((prev) => [
+              ...prev,
+              buildAiMessage(
+                `⏳ **AI sedang istirahat sebentar.**\n\nKuota harian Gemini AI sudah habis. Silakan coba lagi sekitar **${retryAfter} detik** lagi.\n\nTenang Bos! Saya sudah otomatis ganti ke **Mode Manual** ⚡ supaya Bos tetap bisa catat transaksi seperti biasa.`,
+              ),
+            ]);
+            return;
+          }
+
           throw new Error(data.message || "Gagal menghubungkan ke asisten AI");
         }
 
@@ -545,8 +569,13 @@ export default function AIAssistant({
                 Catetin AI Asisten
               </h4>
               <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Aktif & Siap Membantu
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full animate-pulse",
+                    useAI ? "bg-emerald-500" : "bg-amber-400",
+                  )}
+                />
+                {useAI ? "Mode AI Aktif" : "Mode Manual"}
               </p>
             </div>
           </div>
@@ -621,20 +650,47 @@ export default function AIAssistant({
         </div>
 
         {/* Input */}
-        <div className="p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex items-center gap-2.5">
+        <div className="p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex items-center gap-2">
+          {/* Mic */}
           <button
             onClick={startVoice}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90"
+            title="Input suara"
           >
             <Mic className="h-5 w-5" />
           </button>
+
+          {/* Toggle AI / Manual */}
+          <button
+            onClick={() => setUseAI((v) => !v)}
+            title={useAI ? "Mode AI — klik untuk ganti ke Manual" : "Mode Manual — klik untuk ganti ke AI"}
+            className={cn(
+              "flex shrink-0 items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-extrabold tracking-wide transition-all duration-300 cursor-pointer active:scale-95",
+              useAI
+                ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15"
+                : "bg-amber-400/10 border-amber-400/30 text-amber-600 dark:text-amber-400 hover:bg-amber-400/15",
+            )}
+          >
+            {useAI ? (
+              <Sparkles className="h-3 w-3" />
+            ) : (
+              <Zap className="h-3 w-3" />
+            )}
+            {useAI ? "AI" : "Manual"}
+          </button>
+
+          {/* Text input + send */}
           <div className="relative flex-1 flex items-center">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Tulis transaksi Bos..."
+              placeholder={
+                useAI
+                  ? "Tanya atau catat transaksi..."
+                  : "Tulis transaksi Bos (mode manual)..."
+              }
               className="w-full rounded-full border border-stone-200 dark:border-zinc-800 px-4 py-2.5 pr-11 text-xs font-semibold shadow-3xs bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50 transition-colors"
             />
             <button

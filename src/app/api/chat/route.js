@@ -129,6 +129,29 @@ Kategori harus salah satu dari: "food", "shopping", "bills", "salary", "rent", "
     return NextResponse.json(parsedData);
   } catch (error) {
     console.error("API Chat Error:", error);
+
+    // ── Deteksi rate-limit 429 dari Gemini SDK ────────────────────
+    const msg = error.message || "";
+    const isRateLimit =
+      msg.includes("429") ||
+      msg.toLowerCase().includes("quota exceeded") ||
+      msg.toLowerCase().includes("too many requests");
+
+    if (isRateLimit) {
+      // Coba ekstrak waktu retry dari pesan error, contoh: "Please retry in 28s"
+      const retryMatch = msg.match(/retry in (\d+\.?\d*)s/i);
+      const retryAfter = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+
+      return NextResponse.json(
+        {
+          error: "RATE_LIMIT_EXCEEDED",
+          message: "Kuota Gemini AI harian sudah habis.",
+          retryAfter,
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
       { error: "API_ERROR", message: error.message || "Terjadi kesalahan internal" },
       { status: 500 }

@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/format";
 import { Toaster, toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { getGuestId } from "@/lib/guest-id";
 
 // ─── Supabase field mapping ────────────────────────────────────────
 // DB  : id, type, item_name, category, amount, qty, unit, created_at
@@ -287,10 +288,16 @@ export default function Home() {
   useEffect(() => {
     async function fetchTransactions() {
       setLoading(true);
-      const { data, error } = await supabase
+      // Determine ownership context
+      const { data: userData } = await supabase.auth.getUser();
+      const isAuth = !!userData?.user?.id;
+      const query = supabase
         .from("transactions")
         .select("*")
         .order("created_at", { ascending: false });
+      const { data, error } = isAuth
+        ? await query.eq("user_id", userData.user.id)
+        : await query.eq("session_id", getGuestId());
 
       if (error) {
         toast.error("Gagal memuat data", { description: error.message });
@@ -311,9 +318,17 @@ export default function Home() {
 
   // ── Add transaction → INSERT ─────────────────────────────────────
   const handleAddTransaction = async (newTx) => {
+    // Resolve ownership before insert
+    const { data: userData } = await supabase.auth.getUser();
+    const insertPayload = {
+      ...appToDb(newTx),
+      ...(userData?.user?.id
+        ? { user_id: userData.user.id }
+        : { session_id: getGuestId() }),
+    };
     const { data, error } = await supabase
       .from("transactions")
-      .insert([appToDb(newTx)])
+      .insert([insertPayload])
       .select()
       .single();
 
@@ -350,12 +365,16 @@ export default function Home() {
       });
   };
 
-  // ── Clear all → DELETE all ───────────────────────────────────────
+  // ── Clear all → DELETE only this user/guest's rows ──────────────
   const handleClearTransactions = async () => {
-    const { error } = await supabase
-      .from("transactions")
-      .delete()
-      .neq("id", 0); // hapus semua baris
+    // Resolve ownership — same logic as fetch & insert
+    const { data: userData } = await supabase.auth.getUser();
+    const isAuth = !!userData?.user?.id;
+
+    const query = supabase.from("transactions").delete();
+    const { error } = isAuth
+      ? await query.eq("user_id", userData.user.id)
+      : await query.eq("session_id", getGuestId());
 
     if (error) {
       toast.error("Gagal mereset data", { description: error.message });
