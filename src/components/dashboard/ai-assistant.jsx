@@ -1,0 +1,590 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { Sparkles, X, Send, Mic, RefreshCw, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { formatRupiah } from "@/lib/format";
+import {
+  parseTransactionText,
+  splitIntoSegments,
+} from "@/lib/parse-transaction";
+
+// ─── Constants ───────────────────────────────────────────────────
+const WELCOME_MESSAGE = {
+  id: "welcome",
+  sender: "ai",
+  text: 'Halo Bos!\n\nSaya **Catetin AI**, asisten keuangan pribadi tokomu. Bos bisa catat penjualan atau pengeluaran toko langsung di sini.\n\nContoh:\n• *"jual kopi susu 5 porsi 75 ribu"*\n• *"beli gas LPG 22rb"*\n• *"bayar tagihan listrik 150 ribu"*',
+};
+
+const SUGGESTIONS = [
+  "Jual nasi goreng 3 porsi 60rb",
+  "Beli gas LPG 22rb",
+  "Bayar listrik toko 150rb",
+];
+
+// ─── Helper: buat pesan AI ───────────────────────────────────────
+function buildTimestamp() {
+  return new Date().toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function buildAiMessage(text, parsedData = null) {
+  return {
+    id: Date.now().toString(),
+    sender: "ai",
+    text,
+    timestamp: buildTimestamp(),
+    parsedData,
+  };
+}
+
+function buildSuccessText(txList) {
+  if (txList.length === 1) {
+    const { tx } = txList[0];
+    const isIncome = tx.type === "income";
+    return isIncome
+      ? `**Pemasukan Berhasil Dicatat!**\n\nPenjualan **${tx.item}** sebanyak **${tx.qty} pcs** senilai **${formatRupiah(tx.amount)}** sudah masuk ke dashboard.`
+      : `**Pengeluaran Berhasil Dicatat!**\n\nBelanja **${tx.item}** senilai **${formatRupiah(tx.amount)}** sudah dicatat.`;
+  }
+
+  let text = `**${txList.length} transaksi berhasil dicatat!**\n\n`;
+  txList.forEach(({ tx }) => {
+    const label = tx.type === "income" ? "Penjualan" : "Pembelian";
+    text += `• **${label} ${tx.item}** — *${formatRupiah(tx.amount)}*\n`;
+  });
+  return text;
+}
+
+function buildFailText(failures) {
+  let text = `**Transaksi tidak dapat diproses:**\n\n`;
+  failures.forEach((f) => {
+    text += `• **"${f.rawText}"**\n  *Alasan: ${f.reason}*\n`;
+  });
+  text += `\nCoba tuliskan seperti: *"jual kopi 2 gelas 40rb"*`;
+  return text;
+}
+
+// ─── Sub-component: Message Bubble ───────────────────────────────
+function MessageBubble({ msg }) {
+  const isAi = msg.sender === "ai";
+
+  const renderText = (text) =>
+    text.split("\n").map((line, i) => (
+      <p
+        key={i}
+        className={cn(
+          "text-xs leading-relaxed font-medium",
+          i > 0 && "mt-1.5",
+          isAi
+            ? "text-zinc-800 dark:text-zinc-200"
+            : "text-zinc-900 dark:text-white",
+        )}
+      >
+        {line.split(/(\*\*.*?\*\*|\*.*?\*)/g).map((part, j) => {
+          if (part.startsWith("**") && part.endsWith("**"))
+            return (
+              <strong
+                key={j}
+                className="font-extrabold text-zinc-950 dark:text-white"
+              >
+                {part.slice(2, -2)}
+              </strong>
+            );
+          if (part.startsWith("*") && part.endsWith("*"))
+            return (
+              <em
+                key={j}
+                className="italic text-emerald-600 dark:text-emerald-400 font-semibold"
+              >
+                {part.slice(1, -1)}
+              </em>
+            );
+          return part;
+        })}
+      </p>
+    ));
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col max-w-[85%] rounded-2xl p-3 shadow-3xs",
+        isAi
+          ? "self-start bg-white dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-900/80 rounded-tl-sm"
+          : "self-end bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/10 rounded-tr-sm",
+      )}
+    >
+      {renderText(msg.text)}
+
+      {msg.parsedData && (
+        <div className="mt-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center gap-1.5">
+          <span
+            className={cn(
+              "text-[9px] font-extrabold px-1.5 py-0.5 rounded-sm uppercase tracking-wide",
+              msg.parsedData.type === "income"
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+            )}
+          >
+            {msg.parsedData.type === "income" ? "Pemasukan" : "Pengeluaran"}
+          </span>
+          <span className="text-[9px] font-bold text-zinc-400 uppercase">
+            {msg.parsedData.category}
+          </span>
+          {msg.parsedData.qty > 1 && (
+            <span className="text-[9px] font-bold px-1 rounded-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+              Qty: {msg.parsedData.qty}
+            </span>
+          )}
+        </div>
+      )}
+
+      <span className="text-[8px] font-bold text-zinc-400/80 self-end mt-1 uppercase tracking-widest">
+        {msg.timestamp}
+      </span>
+    </div>
+  );
+}
+
+// ─── Sub-component: Voice Overlay ────────────────────────────────
+function VoiceOverlay({ state, seconds, errorMessage, onStop, onRetry }) {
+  const states = {
+    listening: {
+      color: "bg-emerald-500",
+      icon: <Mic className="h-6 w-6 animate-pulse" />,
+      title: "Mendengarkan Suara Bos...",
+      sub: `Durasi: ${seconds} detik`,
+    },
+    processing: {
+      color: "bg-indigo-500",
+      icon: <RefreshCw className="h-6 w-6 animate-spin" />,
+      title: "Memproses Suara...",
+      sub: "Mengubah ucapan menjadi teks...",
+    },
+    success: {
+      color: "bg-emerald-500",
+      icon: <Sparkles className="h-6 w-6 animate-pulse" />,
+      title: "Berhasil Diterjemahkan!",
+      sub: "Mencatat ke dashboard...",
+    },
+    failed: {
+      color: "bg-rose-500",
+      icon: <X className="h-6 w-6" />,
+      title: "Gagal Mengenali Suara",
+      sub: errorMessage || "Tidak ada suara yang terdeteksi",
+    },
+  };
+
+  const s = states[state];
+  if (!s) return null;
+
+  return (
+    <div className="absolute inset-0 bg-zinc-950/95 z-35 flex flex-col items-center justify-center text-center p-6 text-white">
+      <div className="relative flex items-center justify-center h-28 w-28 mb-4">
+        {state === "listening" && (
+          <>
+            <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ripple" />
+            <div className="absolute inset-4 rounded-full bg-emerald-500/30 animate-ripple [animation-delay:0.5s]" />
+          </>
+        )}
+        <div
+          className={cn(
+            "relative flex h-14 w-14 items-center justify-center rounded-full text-white",
+            s.color,
+          )}
+        >
+          {s.icon}
+        </div>
+      </div>
+      <h3 className="text-sm font-bold">{s.title}</h3>
+      <p className="mt-1 text-xs text-zinc-400 font-semibold">{s.sub}</p>
+
+      {state === "failed" ? (
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={onRetry}
+            className="px-4 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold cursor-pointer"
+          >
+            Coba Lagi
+          </button>
+          <button
+            onClick={onStop}
+            className="px-4 py-1.5 rounded-full border border-zinc-700 bg-zinc-900/50 text-xs font-semibold text-zinc-300 cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      ) : state === "listening" ? (
+        <button
+          onClick={onStop}
+          className="mt-6 px-4 py-1.5 rounded-full border border-zinc-700 bg-zinc-900/50 text-xs font-semibold text-zinc-300 cursor-pointer"
+        >
+          Selesai
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────
+export default function AIAssistant({
+  onAddTransaction,
+  onClearTransactions,
+  inline = false,
+  clearSignal = 0,   // ← tambah
+  resetSignal = 0,   // ← tambah
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [messages, setMessages] = useState([
+    { ...WELCOME_MESSAGE, timestamp: buildTimestamp() },
+  ]);
+  const [voiceState, setVoiceState] = useState("idle");
+  const [voiceError, setVoiceError] = useState("");
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+
+  const recognitionRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping]);
+
+  useEffect(() => {
+    if (voiceState !== "listening") {
+      setRecordingSeconds(0);
+      return;
+    }
+    const id = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [voiceState]);
+
+  useEffect(() => {
+    if (clearSignal === 0) return;
+    setMessages([{ ...WELCOME_MESSAGE, id: Date.now().toString(), timestamp: buildTimestamp() }]);
+  }, [clearSignal]);
+
+  useEffect(() => {
+    if (resetSignal === 0) return;
+    setMessages((prev) => [...prev, buildAiMessage("**Dashboard berhasil direset!** Mari mulai pencatatan keuangan baru!")]);
+  }, [resetSignal]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.stop();
+      } catch (_) {}
+    };
+  }, []);
+
+  // ─── Voice ───────────────────────────────────────────────────
+  const startVoice = () => {
+    const API = window?.SpeechRecognition ?? window?.webkitSpeechRecognition;
+    if (!API) {
+      setVoiceState("failed");
+      setVoiceError("Browser tidak mendukung voice input");
+      return;
+    }
+
+    try {
+      recognitionRef.current?.stop();
+    } catch (_) {}
+
+    const rec = new API();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = "id-ID";
+
+    rec.onstart = () => setVoiceState("listening");
+    rec.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      if (!transcript?.trim()) {
+        setVoiceState("failed");
+        setVoiceError("Tidak ada suara yang terdeteksi");
+        return;
+      }
+      setVoiceState("processing");
+      setTimeout(() => {
+        setVoiceState("success");
+        setTimeout(() => {
+          handleSend(transcript);
+          setVoiceState("idle");
+        }, 800);
+      }, 1000);
+    };
+    rec.onerror = (e) => {
+      setVoiceState("failed");
+      const errors = {
+        "no-speech": "Tidak ada suara yang terdeteksi",
+        "not-allowed": "Izin mikrofon ditolak",
+      };
+      setVoiceError(errors[e.error] ?? "Terjadi kesalahan pengenalan suara");
+    };
+    rec.onend = () =>
+      setVoiceState((prev) => {
+        if (prev === "listening") {
+          setVoiceError("Tidak ada suara yang terdeteksi");
+          return "failed";
+        }
+        return prev;
+      });
+
+    recognitionRef.current = rec;
+    rec.start();
+  };
+
+  const stopVoice = () => {
+    try {
+      recognitionRef.current?.stop();
+    } catch (_) {}
+    setVoiceState("idle");
+  };
+
+  // ─── Send Message ─────────────────────────────────────────────
+  const handleSend = (text = input) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        sender: "user",
+        text: trimmed,
+        timestamp: buildTimestamp(),
+      },
+    ]);
+    setInput("");
+    setIsTyping(true);
+
+    setTimeout(() => {
+      setIsTyping(false);
+
+      const segments = splitIntoSegments(trimmed);
+      if (segments.length === 0) {
+        setMessages((prev) => [
+          ...prev,
+          buildAiMessage(
+            'Maaf Bos, saya belum memahami maksud pencatatan tersebut.\n\nContoh:\n• *"jual kopi 2 gelas 40rb"*\n• *"beli gas LPG 22rb"*',
+          ),
+        ]);
+        return;
+      }
+
+      const successes = [];
+      const failures = [];
+
+      segments.forEach((seg, i) => {
+        const result = parseTransactionText(seg);
+        if (result.success) {
+          const tx = {
+            id: `${Date.now()}-${i}`,
+            ...result.data,
+            time: buildTimestamp(),
+          };
+          successes.push({ tx, parsedData: result.data });
+        } else {
+          failures.push({ rawText: seg, reason: result.message });
+        }
+      });
+
+      if (successes.length === 0) {
+        setMessages((prev) => [
+          ...prev,
+          buildAiMessage(buildFailText(failures)),
+        ]);
+        return;
+      }
+
+      successes.forEach(({ tx }) => onAddTransaction(tx));
+
+      let responseText = buildSuccessText(successes);
+      if (failures.length > 0) responseText += `\n\n` + buildFailText(failures);
+
+      setMessages((prev) => [
+        ...prev,
+        buildAiMessage(responseText, successes[0].parsedData),
+      ]);
+    }, 850);
+  };
+
+  // ─── Actions ─────────────────────────────────────────────────
+  const handleClearHistory = () => {
+    if (!confirm("Hapus seluruh percakapan asisten?")) return;
+    setMessages([
+      {
+        ...WELCOME_MESSAGE,
+        id: Date.now().toString(),
+        timestamp: buildTimestamp(),
+      },
+    ]);
+  };
+
+  const handleResetData = () => {
+    if (!confirm("Reset seluruh data transaksi dashboard juga?")) return;
+    onClearTransactions();
+    setMessages((prev) => [
+      ...prev,
+      buildAiMessage(
+        "**Dashboard berhasil direset!** Mari mulai pencatatan keuangan baru!",
+      ),
+    ]);
+  };
+
+  // ─── Render ───────────────────────────────────────────────────
+  return (
+    <>
+      {!inline && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <div className="relative">
+            {!isOpen && (
+              <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-500 opacity-70 blur-md animate-pulse-glow" />
+            )}
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg bg-gradient-to-tr from-emerald-500 via-teal-600 to-indigo-600 hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer"
+            >
+              {isOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Sparkles className="h-6 w-6 animate-float" />
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={cn(
+          inline
+            ? "flex-1 flex flex-col w-full h-full relative overflow-hidden bg-transparent"
+            : "fixed inset-x-4 bottom-24 z-50 max-w-lg mx-auto overflow-hidden rounded-2xl border border-zinc-150 dark:border-zinc-900 bg-white dark:bg-zinc-950 shadow-2xl transition-all duration-500 origin-bottom-right",
+          !inline &&
+            (isOpen
+              ? "opacity-100 scale-100 translate-y-0"
+              : "opacity-0 scale-90 translate-y-10 pointer-events-none"),
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900/80 px-4 py-3.5 bg-zinc-50/50 dark:bg-zinc-900/40">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <Sparkles className="h-4 w-4 text-emerald-500 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-zinc-900 dark:text-white">
+                Catetin AI Asisten
+              </h4>
+              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Aktif & Siap Membantu
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleResetData}
+              title="Reset data"
+              className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-rose-500 transition-colors cursor-pointer"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleClearHistory}
+              title="Hapus riwayat"
+              className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+            {!inline && (
+              <button
+                onClick={() => setIsOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-500 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Voice Overlay */}
+        {voiceState !== "idle" && (
+          <VoiceOverlay
+            state={voiceState}
+            seconds={recordingSeconds}
+            errorMessage={voiceError}
+            onStop={stopVoice}
+            onRetry={startVoice}
+          />
+        )}
+
+        {/* Messages */}
+        <div
+          className={cn(
+            "flex flex-col overflow-y-auto px-4 py-3.5 space-y-3.5 bg-[#FAF9F6]/25 dark:bg-[#0C0C0B]/25 scrollbar-none",
+            inline ? "flex-1" : "h-[280px]",
+          )}
+        >
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} msg={msg} />
+          ))}
+          {isTyping && (
+            <div className="self-start bg-white dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-900/80 rounded-2xl rounded-tl-sm p-3.5 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.2s]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.4s]" />
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Suggestions */}
+        <div className="flex gap-2 overflow-x-auto px-4 py-2 border-t border-stone-200/50 dark:border-zinc-900/60 bg-white/60 dark:bg-[#0C0C0B]/60 scrollbar-none">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => handleSend(s)}
+              className="whitespace-nowrap shrink-0 text-[10px] font-extrabold px-3 py-1.5 rounded-full border border-stone-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 hover:bg-emerald-50/60 dark:hover:bg-emerald-500/10 text-zinc-600 dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/30 transition-all duration-300 cursor-pointer active:scale-95 shadow-3xs"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        {/* Input */}
+        <div className="p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex items-center gap-2.5">
+          <button
+            onClick={startVoice}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90"
+          >
+            <Mic className="h-5 w-5" />
+          </button>
+          <div className="relative flex-1 flex items-center">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="Tulis transaksi Bos..."
+              className="w-full rounded-full border border-stone-200 dark:border-zinc-800 px-4 py-2.5 pr-11 text-xs font-semibold shadow-3xs bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50 transition-colors"
+            />
+            <button
+              onClick={() => handleSend()}
+              disabled={!input.trim()}
+              className={cn(
+                "absolute right-1 flex h-8 w-8 items-center justify-center rounded-full text-white transition-all cursor-pointer",
+                input.trim()
+                  ? "bg-emerald-500 hover:bg-emerald-600 active:scale-95"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 pointer-events-none scale-90",
+              )}
+            >
+              <Send className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
