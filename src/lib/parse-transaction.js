@@ -1,6 +1,7 @@
-const INCOME_KEYWORDS = /\b(jual|pemasukan|masuk|order|pesanan|pendapatan)\b/i;
+const INCOME_KEYWORDS =
+  /\b(jual|pemasukan|masuk|order|pesanan|pendapatan|terjual)\b/i;
 const EXPENSE_KEYWORDS =
-  /\b(beli|bayar|belanja|pengeluaran|keluar|ongkos|gaji|upah|sewa)\b/i;
+  /\b(beli|bayar|belanja|pengeluaran|keluar|ongkos|gaji|upah|sewa|terbeli)\b/i;
 
 const CATEGORY_KEYWORDS = {
   food: /nasi|kopi|ayam|jus|teh|gorengan|telur|susu|bakso|makanan|es|mie|soto|bubur/i,
@@ -91,7 +92,7 @@ const UNIT_TOKENS =
 function extractItemName(text, moneyMatches = [], qtyFullMatch = "") {
   let clean = text
     .replace(
-      /\b(jual|beli|bayar|belanja|pemasukan|pengeluaran|tambah|catat)\b/gi,
+      /\b(jual|terjual|terbeli|dibeli|pembelian|bayar|belanja|pemasukan|pengeluaran|tambah|catat)\b/gi,
       "",
     )
     .replace(

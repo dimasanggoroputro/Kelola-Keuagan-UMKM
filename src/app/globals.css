@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -74,9 +75,9 @@
 }
 
 @theme inline {
-    --font-sans: var(--font-geist-sans), "Inter", "Satoshi", ui-sans-serif, system-ui, sans-serif;
-    --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
-    --font-heading: var(--font-geist-sans), "Inter", "Satoshi", ui-sans-serif, system-ui, sans-serif;
+    --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, monospace;
+    --font-heading: "Poppins", ui-sans-serif, system-ui, sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -129,65 +130,87 @@
   }
 }
 
-/* Custom Scrollbar for a premium look */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* ── Scrollbar ────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 9999px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--muted-foreground);
-}
+::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
 
-/* Premium custom keyframe animations */
+/* ── Keyframes ────────────────────────────────────────────────────── */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
+  50%       { transform: translateY(-6px); }
 }
 
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 15px 2px rgba(16, 185, 129, 0.2); }
-  50% { box-shadow: 0 0 25px 8px rgba(16, 185, 129, 0.4); }
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(16,185,129,0.15); }
+  50%       { box-shadow: 0 0 22px 6px rgba(16,185,129,0.35); }
 }
 
 @keyframes pulseGlowViolet {
-  0%, 100% { box-shadow: 0 0 15px 2px rgba(139, 92, 246, 0.2); }
-  50% { box-shadow: 0 0 25px 8px rgba(139, 92, 246, 0.4); }
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(139,92,246,0.15); }
+  50%       { box-shadow: 0 0 22px 6px rgba(139,92,246,0.35); }
 }
 
 @keyframes ripple {
-  0% { transform: scale(0.95); opacity: 0.5; }
-  50% { opacity: 0.3; }
-  100% { transform: scale(1.4); opacity: 0; }
+  0%   { transform: scale(0.9);  opacity: 0.5; }
+  50%  { opacity: 0.25; }
+  100% { transform: scale(1.45); opacity: 0; }
 }
 
 @keyframes textPulse {
   0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  50%       { opacity: 1; }
 }
 
-.animate-float {
-  animation: float 4s ease-in-out infinite;
+/* Modal / sheet entrance */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
-.animate-pulse-glow {
-  animation: pulseGlow 3s ease-in-out infinite;
+@keyframes slideUpSm {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
-.animate-pulse-glow-violet {
-  animation: pulseGlowViolet 3s ease-in-out infinite;
+/* Item entrance (stagger-friendly) */
+@keyframes fadeInUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
-.animate-ripple {
-  animation: ripple 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
-.animate-text-pulse {
-  animation: textPulse 1.5s ease-in-out infinite;
+/* New item highlight flash */
+@keyframes highlightNew {
+  0%   { background-color: oklch(0.8 0.15 160 / 0.18); }
+  100% { background-color: transparent; }
 }
+
+/* ── Utility classes ─────────────────────────────────────────────── */
+.animate-float          { animation: float 4s ease-in-out infinite; }
+.animate-pulse-glow     { animation: pulseGlow 3s ease-in-out infinite; }
+.animate-pulse-glow-violet { animation: pulseGlowViolet 3s ease-in-out infinite; }
+.animate-ripple         { animation: ripple 2s cubic-bezier(0,0,0.2,1) infinite; }
+.animate-text-pulse     { animation: textPulse 1.5s ease-in-out infinite; }
+
+/* Modal bottom-sheet (mobile: slide from bottom; desktop: fade+slide from below) */
+.animate-slide-up {
+  animation: slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+@media (min-width: 640px) {
+  .animate-slide-up {
+    animation: slideUpSm 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+.animate-fade-in        { animation: fadeIn 0.2s ease forwards; }
+.animate-fade-in-up     { animation: fadeInUp 0.3s ease forwards; }
+.animate-highlight-new  { animation: highlightNew 1.4s ease forwards; }

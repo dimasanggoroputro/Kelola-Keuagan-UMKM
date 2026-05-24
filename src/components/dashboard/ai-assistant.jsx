@@ -8,6 +8,11 @@ import {
   parseTransactionText,
   splitIntoSegments,
 } from "@/lib/parse-transaction";
+import {
+  getCachedResponse,
+  setCachedResponse,
+  clearAICache,
+} from "@/lib/ai-cache";
 
 // ─── Constants ───────────────────────────────────────────────────
 const WELCOME_MESSAGE = {
@@ -432,9 +437,25 @@ export default function AIAssistant({
       return;
     }
 
-    // ── Mode AI: kirim ke Gemini API ──────────────────────────────
+    // ── Mode AI: cek cache dulu sebelum panggil Gemini API ─────────
+    const cached = getCachedResponse(trimmed);
+    if (cached) {
+      // Cache hit — tidak pakai quota sama sekali
+      const { response, transactions: cachedTxList = [] } = cached;
+      setMessages((prev) => [
+        ...prev,
+        buildAiMessage(response, cachedTxList.length > 0 ? cachedTxList[0] : null),
+      ]);
+      return;
+    }
+
+    // ── Cache miss — kirim ke Gemini API ──────────────────────────
     setIsTyping(true);
-    const chatHistoryForApi = messages.filter((m) => m.id !== "welcome");
+
+    // Kirim maksimal 6 pesan terakhir sebagai history agar token hemat
+    const chatHistoryForApi = messages
+      .filter((m) => m.id !== "welcome")
+      .slice(-6);
 
     (async () => {
       try {
@@ -460,7 +481,7 @@ export default function AIAssistant({
           // ── Rate limit: tampilkan pesan ramah + auto-switch manual ──
           if (data.error === "RATE_LIMIT_EXCEEDED") {
             const retryAfter = data.retryAfter || 60;
-            setUseAI(false); // otomatis pindah ke mode manual
+            setUseAI(false);
             setMessages((prev) => [
               ...prev,
               buildAiMessage(
@@ -474,6 +495,9 @@ export default function AIAssistant({
         }
 
         const { response, transactions: newTxList = [] } = data;
+
+        // Simpan ke cache (hanya Q&A, bukan pencatatan transaksi)
+        setCachedResponse(trimmed, { response, transactions: newTxList });
 
         if (newTxList.length > 0) {
           newTxList.forEach((tx, i) => {
@@ -516,6 +540,7 @@ export default function AIAssistant({
   const handleResetData = () => {
     if (!confirm("Reset seluruh data transaksi dashboard juga?")) return;
     onClearTransactions();
+    clearAICache(); // bersihkan cache saat reset agar data baru tidak tercampur
     setMessages((prev) => [
       ...prev,
       buildAiMessage(
