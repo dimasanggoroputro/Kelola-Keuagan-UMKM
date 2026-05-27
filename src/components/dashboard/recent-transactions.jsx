@@ -36,29 +36,31 @@ function getCategoryConfig(category) {
 // ─── Empty State ─────────────────────────────────────────────────
 function EmptyState({ isFiltered }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-dashed border-stone-200 dark:border-zinc-900/60 bg-white/40 dark:bg-zinc-900/10">
-      <div className="relative mb-4">
-        <div className="absolute -inset-2 rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-xs" />
-        <div className="relative flex h-14 w-14 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 animate-float">
+    <div className="flex flex-col items-center justify-center text-center py-12 px-6 rounded-2xl border border-dashed border-stone-200 dark:border-zinc-800/60 bg-gradient-to-b from-white/60 to-stone-50/30 dark:from-zinc-900/20 dark:to-zinc-950/10">
+      <div className="relative mb-5">
+        <div className="absolute -inset-3 rounded-full bg-emerald-500/8 dark:bg-emerald-500/5 blur-lg animate-pulse" style={{ animationDuration: '4s' }} />
+        <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm">
           {isFiltered ? (
-            <Search className="h-6 w-6 text-zinc-400 dark:text-zinc-500" />
+            <Search className="h-7 w-7 text-zinc-300 dark:text-zinc-600" />
           ) : (
-            <Receipt className="h-6 w-6 text-zinc-400 dark:text-zinc-500" />
+            <Receipt className="h-7 w-7 text-zinc-300 dark:text-zinc-600" />
           )}
         </div>
       </div>
-      <h4 className="text-xs font-bold text-zinc-900 dark:text-white">
+      <h4 className="text-sm font-black text-zinc-800 dark:text-white tracking-tight">
         {isFiltered ? "Tidak Ditemukan" : "Belum Ada Transaksi"}
       </h4>
-      <p className="mt-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 max-w-[240px] leading-relaxed">
+      <p className="mt-2 text-xs font-medium text-zinc-400 dark:text-zinc-500 max-w-[260px] leading-relaxed">
         {isFiltered
-          ? "Coba kata kunci lain atau ubah filter kategori."
-          : "Kas tokomu masih kosong. Catat transaksi lewat Asisten AI!"}
+          ? "Coba kata kunci lain atau ubah filter kategori Bos."
+          : "Buku kas toko Bos masih bersih. Yuk mulai catat pemasukan pertama lewat Asisten AI!"}
       </p>
       {!isFiltered && (
-        <div className="mt-4 flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-          <PlusCircle className="h-3 w-3 animate-pulse" />
-          <span>jual kopi susu 25rb</span>
+        <div className="mt-5 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/8 dark:bg-emerald-500/5 border border-emerald-500/10">
+          <PlusCircle className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
+          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 italic">
+            &quot;jual kopi susu 5 gelas 75 ribu&quot;
+          </span>
         </div>
       )}
     </div>

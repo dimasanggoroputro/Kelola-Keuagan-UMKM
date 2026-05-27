@@ -4,6 +4,7 @@ export const metadata = {
   title: "Catetin AI — Asisten Keuangan Pintar UMKM",
   description:
     "Aplikasi pencatatan keuangan bertenaga AI untuk UMKM Indonesia. Catat pendapatan dan pengeluaran semudah berkirim pesan chatting.",
+  manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
     apple: "/apple-touch-icon.png",

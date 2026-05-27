@@ -6,6 +6,7 @@ import StatsCard from "@/components/dashboard/stats-card";
 import RecentTransactions from "@/components/dashboard/recent-transactions";
 import AIAssistant from "@/components/dashboard/ai-assistant";
 import SparklineChart from "@/components/dashboard/sparkline-chart";
+import CategoryDonutChart from "@/components/dashboard/financial-charts";
 import EditTransactionModal from "@/components/dashboard/edit-transaction-modal";
 import StoreSetupModal from "@/components/dashboard/store-setup-modal";
 import ExportPanel from "@/components/dashboard/export-panel";
@@ -23,6 +24,11 @@ import { formatRupiah } from "@/lib/format";
 import { Toaster, toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { getGuestId } from "@/lib/guest-id";
+import LoginModal from "@/components/dashboard/login-modal";
+import LandingPage from "@/components/dashboard/landing-page";
+import { migrateGuestTransactions } from "@/lib/auth-handler";
+import { signOut } from "@/lib/auth";
+import { getDemoTransactions } from "@/lib/demo-data";
 
 // ─── Supabase field mapping ────────────────────────────────────────
 // DB  : id, type, item_name, category, amount, qty, unit, created_at
@@ -228,6 +234,9 @@ function KasPanel({
           {/* Sparkline Chart */}
           <SparklineChart transactions={allTransactions} />
 
+          {/* Category Donut Chart */}
+          <CategoryDonutChart transactions={transactions} />
+
           {/* AI Insights */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold tracking-wider uppercase text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
@@ -235,14 +244,18 @@ function KasPanel({
               Analisis Keuangan AI
             </h3>
             {aiInsights.length === 0 ? (
-              <div className="p-5 rounded-2xl border border-dashed border-stone-200 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-900/10 flex flex-col items-center justify-center text-center">
-                <BrainCircuit className="h-5 w-5 text-zinc-400 dark:text-zinc-600 mb-3" />
-                <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+              <div className="py-10 px-5 rounded-2xl border border-dashed border-stone-200 dark:border-zinc-800/60 bg-gradient-to-b from-white/60 to-stone-50/30 dark:from-zinc-900/20 dark:to-zinc-950/10 flex flex-col items-center justify-center text-center">
+                <div className="relative mb-4">
+                  <div className="absolute -inset-2 rounded-full bg-indigo-500/8 dark:bg-indigo-500/5 blur-lg animate-pulse" style={{ animationDuration: '5s' }} />
+                  <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm">
+                    <BrainCircuit className="h-6 w-6 text-zinc-300 dark:text-zinc-600" />
+                  </div>
+                </div>
+                <h4 className="text-sm font-black text-zinc-800 dark:text-white tracking-tight">
                   Analisis Belum Tersedia
                 </h4>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 font-medium max-w-[240px]">
-                  Catat beberapa transaksi agar AI dapat menganalisis kinerja
-                  bisnis Bos.
+                <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500 font-medium max-w-[260px] leading-relaxed">
+                  Catat beberapa transaksi agar AI dapat menganalisis kinerja bisnis Bos secara otomatis.
                 </p>
               </div>
             ) : (
@@ -385,7 +398,12 @@ export default function Home() {
     },
   ]);
 
-  // ── Theme & Store Name & Period init ──────────────────────────────────
+  const [user, setUser] = useState(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
+  const [showLanding, setShowLanding] = useState(true);
+
+  // ── Theme & Store Name & Period & Auth & Demo init ──────────────────
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("catetin-theme") || "dark";
@@ -395,38 +413,107 @@ export default function Home() {
     const savedStore = localStorage.getItem("catetin-store-name");
     if (savedStore) {
       setStoreName(savedStore);
-    } else {
-      setShowSetup(true);
+      setShowLanding(false);
     }
 
     const savedPeriod = localStorage.getItem("catetin-period") || "all";
     setActivePeriod(savedPeriod);
-  }, []);
 
-  // ── Load transactions dari Supabase ─────────────────────────────
-  useEffect(() => {
-    async function fetchTransactions() {
-      setLoading(true);
-      // Determine ownership context
-      const { data: userData } = await supabase.auth.getUser();
-      const isAuth = !!userData?.user?.id;
-      const query = supabase
-        .from("transactions")
-        .select("*")
-        .order("created_at", { ascending: false });
-      const { data, error } = isAuth
-        ? await query.eq("user_id", userData.user.id)
-        : await query.eq("session_id", getGuestId());
-
-      if (error) {
-        toast.error("Gagal memuat data", { description: error.message });
-      } else {
-        setTransactions((data ?? []).map(dbToApp));
-      }
-      setLoading(false);
+    // Register Service Worker for PWA
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch((err) => {
+        console.error("Service Worker registration failed: ", err);
+      });
     }
-    fetchTransactions();
+
+    const isDemoMode = localStorage.getItem("catetin-demo") === "true";
+    setIsDemo(isDemoMode);
+
+    if (isDemoMode) {
+      setTransactions(getDemoTransactions().map(dbToApp));
+      setStoreName("Kedai Kopi Bahagia");
+      setShowLanding(false);
+      setLoading(false);
+    } else {
+      // Get current auth session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) {
+          setShowLanding(false);
+        }
+        fetchTransactions(u?.id);
+      });
+    }
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+
+      if (event === "SIGNED_IN" && currentUser) {
+        setIsDemo(false);
+        localStorage.removeItem("catetin-demo");
+        setShowLanding(false);
+        const guestId = localStorage.getItem("catetin-guest-id");
+        if (guestId) {
+          toast.promise(migrateGuestTransactions(guestId, currentUser.id), {
+            loading: "Memindahkan data transaksi lokal ke akun Anda...",
+            success: (res) => {
+              if (res.success && res.migratedCount > 0) {
+                // Clear guest ID upon successful migration
+                localStorage.removeItem("catetin-guest-id");
+                fetchTransactions(currentUser.id);
+                return `Data berhasil dipindahkan! (${res.migratedCount} transaksi)`;
+              }
+              fetchTransactions(currentUser.id);
+              return "Pemindahan data selesai.";
+            },
+            error: "Gagal memindahkan data transaksi lokal.",
+          });
+        } else {
+          fetchTransactions(currentUser.id);
+        }
+        setShowLoginModal(false);
+      } else if (event === "SIGNED_OUT") {
+        setIsDemo(false);
+        localStorage.removeItem("catetin-demo");
+        setShowLanding(true);
+        fetchTransactions(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  async function fetchTransactions(userId = null) {
+    if (localStorage.getItem("catetin-demo") === "true") {
+      setTransactions(getDemoTransactions().map(dbToApp));
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    let currentUserId = userId;
+    if (!currentUserId) {
+      const { data: userData } = await supabase.auth.getUser();
+      currentUserId = userData?.user?.id;
+    }
+    const isAuth = !!currentUserId;
+    const query = supabase
+      .from("transactions")
+      .select("*")
+      .order("created_at", { ascending: false });
+    const { data, error } = isAuth
+      ? await query.eq("user_id", currentUserId)
+      : await query.eq("session_id", getGuestId());
+
+    if (error) {
+      toast.error("Gagal memuat data", { description: error.message });
+    } else {
+      setTransactions((data ?? []).map(dbToApp));
+    }
+    setLoading(false);
+  }
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -437,6 +524,35 @@ export default function Home() {
 
   // ── Add transaction → INSERT ─────────────────────────────────────
   const handleAddTransaction = async (newTx) => {
+    if (localStorage.getItem("catetin-demo") === "true") {
+      const mapped = {
+        id: `demo-sim-${Date.now()}`,
+        type: newTx.type,
+        item: newTx.item,
+        category: newTx.category ?? "other",
+        amount: newTx.amount,
+        qty: newTx.qty ?? 1,
+        unit: newTx.unit ?? null,
+        createdAt: new Date().toISOString(),
+        time: new Date().toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+      setTransactions((prev) => [mapped, ...prev]);
+      setNewestId(mapped.id);
+      setTimeout(() => {
+        setNewestId((curr) => (curr === mapped.id ? null : curr));
+      }, 3000);
+
+      toast.success("Catatan Demo berhasil disimpan", {
+        description: `${
+          newTx.type === "income" ? "Pemasukan" : "Pengeluaran"
+        }: ${newTx.item} (${formatRupiah(newTx.amount)})`,
+      });
+      return;
+    }
+
     // Resolve ownership before insert
     const { data: userData } = await supabase.auth.getUser();
     const insertPayload = {
@@ -472,6 +588,26 @@ export default function Home() {
 
   // ── Edit transaction → UPDATE ────────────────────────────────────
   const handleEditTransaction = async (id, updatedData) => {
+    if (localStorage.getItem("catetin-demo") === "true") {
+      setTransactions((prev) =>
+        prev.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                type: updatedData.type,
+                item: updatedData.item,
+                category: updatedData.category,
+                amount: updatedData.amount,
+                qty: updatedData.qty,
+                unit: updatedData.unit,
+              }
+            : t,
+        ),
+      );
+      toast.success("Transaksi Demo berhasil diperbarui");
+      return;
+    }
+
     const { error } = await supabase
       .from("transactions")
       .update({
@@ -509,6 +645,17 @@ export default function Home() {
 
   // ── Delete transaction → DELETE ──────────────────────────────────
   const handleDeleteTransaction = async (id) => {
+    if (localStorage.getItem("catetin-demo") === "true") {
+      const tx = transactions.find((t) => t.id === id);
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+      if (tx) {
+        toast.error("Transaksi Demo dihapus", {
+          description: `${tx.item} telah dikeluarkan dari kas.`,
+        });
+      }
+      return;
+    }
+
     const tx = transactions.find((t) => t.id === id);
     const { error } = await supabase.from("transactions").delete().eq("id", id);
 
@@ -526,6 +673,12 @@ export default function Home() {
 
   // ── Clear all → DELETE only this user/guest's rows ──────────────
   const handleClearTransactions = async () => {
+    if (localStorage.getItem("catetin-demo") === "true") {
+      setTransactions([]);
+      toast.info("Buku Kas Demo berhasil dikosongkan");
+      return;
+    }
+
     // Resolve ownership — same logic as fetch & insert
     const { data: userData } = await supabase.auth.getUser();
     const isAuth = !!userData?.user?.id;
@@ -579,7 +732,56 @@ export default function Home() {
     .reduce((s, tx) => s + tx.amount, 0);
   const totalProfit = totalIncome - totalExpense;
 
-  if (!mounted) return <div className="min-h-screen bg-zinc-950" />;
+  if (!mounted) return <div className="min-h-screen bg-[#0C0C0B]" />;
+
+  if (showLanding) {
+    return (
+      <>
+        <LandingPage
+          onStartGuest={() => {
+            setShowLanding(false);
+            const savedStore = localStorage.getItem("catetin-store-name");
+            if (!savedStore) {
+              setShowSetup(true);
+            } else {
+              setStoreName(savedStore);
+            }
+            if (!localStorage.getItem("catetin-guest-id")) {
+              getGuestId();
+            }
+          }}
+          onStartDemo={() => {
+            setIsDemo(true);
+            localStorage.setItem("catetin-demo", "true");
+            setTransactions(getDemoTransactions().map(dbToApp));
+            setStoreName("Kedai Kopi Bahagia");
+            setShowLanding(false);
+          }}
+          onLogin={() => {
+            setShowLoginModal(true);
+          }}
+        />
+        {showLoginModal && (
+          <LoginModal
+            isOpen={showLoginModal}
+            onClose={() => setShowLoginModal(false)}
+            onContinueAsGuest={() => {
+              setShowLoginModal(false);
+              setShowLanding(false);
+              const savedStore = localStorage.getItem("catetin-store-name");
+              if (!savedStore) {
+                setShowSetup(true);
+              }
+              if (!localStorage.getItem("catetin-guest-id")) {
+                getGuestId();
+              }
+            }}
+            isMigrating={false}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#FAF9F6] dark:bg-[#0C0C0B] transition-colors duration-300 font-sans">
@@ -595,10 +797,38 @@ export default function Home() {
         activeTab={activeTab}
         storeName={storeName}
         onExport={() => setShowExport(true)}
+        user={user}
+        onLogin={() => setShowLoginModal(true)}
+        onLogout={async () => {
+          if (confirm("Apakah Anda ingin keluar dari akun?")) {
+            await signOut();
+            toast.success("Berhasil keluar.");
+          }
+        }}
       />
 
+      {isDemo && (
+        <div className="fixed top-[72px] left-0 right-0 z-35 bg-amber-500/15 backdrop-blur-md border-b border-amber-500/20 px-4 py-2 flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-400 animate-fade-in shadow-xs">
+          <div className="flex items-center gap-1.5 select-none">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+            <span>Mode Demo Aktif — Menggunakan simulasi data usaha UMKM.</span>
+          </div>
+          <button
+            onClick={() => {
+              setIsDemo(false);
+              localStorage.removeItem("catetin-demo");
+              fetchTransactions(user?.id);
+              toast.info("Kembali ke Buku Kas Anda.");
+            }}
+            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg active:scale-95 transition-all cursor-pointer text-[10px] font-extrabold uppercase tracking-wide shadow-2xs"
+          >
+            Keluar Demo
+          </button>
+        </div>
+      )}
+
       {/* ── Mobile & Tablet (<1024px): full-width, bottom nav ── */}
-      <div className="lg:hidden flex flex-col h-screen fixed inset-0 pb-[68px] pt-[72px] overflow-hidden">
+      <div className={cn("lg:hidden flex flex-col h-screen fixed inset-0 pb-[68px] overflow-hidden", isDemo ? "pt-[108px]" : "pt-[72px]")}>
         {activeTab === "chat" && (
           <div className="flex-1 flex flex-col overflow-hidden">
             <AIAssistant
@@ -659,7 +889,7 @@ export default function Home() {
       </div>
 
       {/* ── Desktop (≥1024px): sidebar kiri + konten ── */}
-      <div className="hidden lg:flex h-screen pt-[72px]">
+      <div className={cn("hidden lg:flex h-screen", isDemo ? "pt-[108px]" : "pt-[72px]")}>
         <DesktopSidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -746,6 +976,20 @@ export default function Home() {
           period={activePeriod}
           storeName={storeName}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showLoginModal && (
+        <LoginModal
+          isOpen={showLoginModal}
+          onClose={() => setShowLoginModal(false)}
+          onContinueAsGuest={() => {
+            setShowLoginModal(false);
+            if (!localStorage.getItem("catetin-guest-id")) {
+              getGuestId();
+            }
+          }}
+          isMigrating={!!localStorage.getItem("catetin-guest-id")}
         />
       )}
     </div>

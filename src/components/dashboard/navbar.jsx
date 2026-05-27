@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sun, Moon, Clock, Download } from "lucide-react";
+import { Sun, Moon, Clock, Download, Cloud, LogOut } from "lucide-react";
 
 function getGreeting(hour) {
   if (hour >= 5  && hour < 11) return { greeting: "Selamat Pagi",  tagline: "Yuk catat jualan pertama hari ini." };
@@ -28,7 +28,7 @@ function getInitials(name) {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-export default function Navbar({ theme, onToggleTheme, storeName = "", onExport }) {
+export default function Navbar({ theme, onToggleTheme, storeName = "", onExport, user = null, onLogin, onLogout }) {
   const [now, setNow] = useState(null);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport 
       <div className="
         flex items-center justify-between
         px-4 md:px-6
-        py-4
+        py-3
         max-w-none
       ">
         {/* Avatar + greeting */}
@@ -96,6 +96,27 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport 
               aria-label="Export Laporan"
             >
               <Download className="h-4 w-4" />
+            </button>
+          )}
+
+          {/* Auth Button */}
+          {user ? (
+            <button
+              onClick={onLogout}
+              className="flex h-9 px-3 items-center justify-center gap-1.5 rounded-xl border border-stone-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-bold shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
+              title="Keluar Akun"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Keluar</span>
+            </button>
+          ) : (
+            <button
+              onClick={onLogin}
+              className="flex h-9 px-3 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold shadow-2xs hover:bg-emerald-500/15 transition-all duration-300 cursor-pointer active:scale-95"
+              title="Amankan Data Keuangan"
+            >
+              <Cloud className="h-3.5 w-3.5 animate-pulse" />
+              <span className="hidden sm:inline">Amankan Data</span>
             </button>
           )}
 
