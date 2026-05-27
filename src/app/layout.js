@@ -9,6 +9,9 @@ export const metadata = {
     icon: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
+  other: {
+    "dicoding:email": "dimasanggoro806@gmail.com",
+  },
 };
 
 export default function RootLayout({ children }) {

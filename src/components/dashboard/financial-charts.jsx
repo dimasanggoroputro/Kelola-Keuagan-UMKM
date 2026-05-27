@@ -67,7 +67,7 @@ export default function CategoryDonutChart({ transactions = [] }) {
   const R = 38;
   const C = 2 * Math.PI * R; // ~238.76
 
-  let accumulatedPercentage = 0;
+  let accumulatedValue = 0;
 
   return (
     <div className="rounded-2xl border border-stone-150 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 p-5 shadow-3xs">
@@ -89,10 +89,10 @@ export default function CategoryDonutChart({ transactions = [] }) {
             />
             {/* Slices */}
             {chartData.map((slice, i) => {
-              const strokeLength = (slice.percentage / 100) * C;
-              const strokeOffset = C - strokeLength;
-              const rotationOffset = (accumulatedPercentage / 100) * 360;
-              accumulatedPercentage += slice.percentage;
+              const ratio = slice.value / totalExpense;
+              const strokeLength = ratio * C;
+              const rotationOffset = (accumulatedValue / totalExpense) * 360;
+              accumulatedValue += slice.value;
 
               const isHighlighted = activeIndex === null || activeIndex === i;
 
@@ -108,7 +108,7 @@ export default function CategoryDonutChart({ transactions = [] }) {
                   )}
                   strokeWidth={isHighlighted ? 12 : 9}
                   strokeDasharray={`${strokeLength} ${C}`}
-                  strokeDashoffset={strokeOffset}
+                  strokeDashoffset={0}
                   transform={`rotate(${rotationOffset} 50 50)`}
                   onMouseEnter={() => setActiveIndex(i)}
                   onMouseLeave={() => setActiveIndex(null)}

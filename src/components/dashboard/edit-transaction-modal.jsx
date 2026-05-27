@@ -13,6 +13,19 @@ const CATEGORIES = [
   { id: "other",    label: "Lainnya" },
 ];
 
+// Formatter for rupiah input (separator dot, e.g. "1.500.000")
+const formatNumberString = (value) => {
+  if (value === undefined || value === null || value === "") return "";
+  const clean = value.toString().replace(/\D/g, "");
+  if (!clean) return "";
+  return new Intl.NumberFormat("id-ID").format(Number(clean));
+};
+
+const parseNumberString = (formattedValue) => {
+  if (formattedValue === undefined || formattedValue === null || formattedValue === "") return "";
+  return formattedValue.toString().replace(/\D/g, "");
+};
+
 export default function EditTransactionModal({ tx, onSave, onClose }) {
   const [form, setForm] = useState({
     item:     tx?.item     ?? "",
@@ -106,9 +119,13 @@ export default function EditTransactionModal({ tx, onSave, onClose }) {
             Jumlah (Rp)
           </span>
           <input
-            type="number"
-            value={form.amount}
-            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+            type="text"
+            inputMode="numeric"
+            value={formatNumberString(form.amount)}
+            onChange={(e) => {
+              const parsed = parseNumberString(e.target.value);
+              setForm((f) => ({ ...f, amount: parsed }));
+            }}
             placeholder="0"
             className="w-full rounded-xl border border-stone-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3.5 py-2.5 text-sm font-semibold text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50 transition-colors"
           />

@@ -376,6 +376,7 @@ export default function Home() {
 
   const [storeName, setStoreName] = useState("");
   const [showSetup, setShowSetup] = useState(false);
+  const [showEditSetup, setShowEditSetup] = useState(false);
   const [activePeriod, setActivePeriod] = useState("all");
   const [editingTx, setEditingTx] = useState(null);
   const [showExport, setShowExport] = useState(false);
@@ -805,6 +806,7 @@ export default function Home() {
             toast.success("Berhasil keluar.");
           }
         }}
+        onEditStoreName={() => setShowEditSetup(true)}
       />
 
       {isDemo && (
@@ -817,6 +819,19 @@ export default function Home() {
             onClick={() => {
               setIsDemo(false);
               localStorage.removeItem("catetin-demo");
+
+              // Restore original guest store name from localStorage or clear it
+              const savedStore = localStorage.getItem("catetin-store-name");
+              if (savedStore) {
+                setStoreName(savedStore);
+              } else {
+                setStoreName("");
+              }
+
+              if (!user) {
+                setShowLanding(true);
+              }
+
               fetchTransactions(user?.id);
               toast.info("Kembali ke Buku Kas Anda.");
             }}
@@ -955,6 +970,18 @@ export default function Home() {
           onComplete={(name) => {
             setStoreName(name);
             setShowSetup(false);
+          }}
+        />
+      )}
+
+      {showEditSetup && (
+        <StoreSetupModal
+          initialValue={storeName}
+          onClose={() => setShowEditSetup(false)}
+          onComplete={(name) => {
+            setStoreName(name);
+            setShowEditSetup(false);
+            toast.success("Nama usaha berhasil diperbarui!");
           }}
         />
       )}

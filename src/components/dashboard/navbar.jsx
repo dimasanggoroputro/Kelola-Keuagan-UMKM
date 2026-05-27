@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sun, Moon, Clock, Download, Cloud, LogOut } from "lucide-react";
+import { Sun, Moon, Clock, Download, Cloud, LogOut, Pencil } from "lucide-react";
 
 function getGreeting(hour) {
   if (hour >= 5  && hour < 11) return { greeting: "Selamat Pagi",  tagline: "Yuk catat jualan pertama hari ini." };
@@ -28,7 +28,7 @@ function getInitials(name) {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-export default function Navbar({ theme, onToggleTheme, storeName = "", onExport, user = null, onLogin, onLogout }) {
+export default function Navbar({ theme, onToggleTheme, storeName = "", onExport, user = null, onLogin, onLogout, onEditStoreName }) {
   const [now, setNow] = useState(null);
 
   useEffect(() => {
@@ -70,9 +70,18 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
           </div>
 
           <div className="flex flex-col min-w-0">
-            <h1 className="text-md font-bold tracking-tight text-zinc-900 dark:text-white leading-tight truncate">
-              {greeting},&nbsp;
-              <span className="font-extrabold">{displayName}</span>
+            <h1 className="text-md font-bold tracking-tight text-zinc-900 dark:text-white leading-tight flex items-center gap-1.5 min-w-0">
+              <span className="truncate">
+                {greeting},&nbsp;
+                <span className="font-extrabold">{displayName}</span>
+              </span>
+              <button
+                onClick={onEditStoreName}
+                className="p-1 rounded-lg hover:bg-stone-200/50 dark:hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors shrink-0 cursor-pointer"
+                title="Ubah Nama Usaha"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
             </h1>
             <p className="hidden sm:block text-[12px] text-zinc-500 dark:text-zinc-400 font-medium truncate">
               {tagline}
