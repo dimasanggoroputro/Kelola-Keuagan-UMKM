@@ -1,21 +1,43 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sun, Moon, Clock, Download, Cloud, LogOut, Pencil, Camera } from "lucide-react";
+import {
+  Sun,
+  Moon,
+  Clock,
+  Download,
+  Cloud,
+  LogOut,
+  Pencil,
+  Camera,
+} from "lucide-react";
 
 function getGreeting(hour) {
-  if (hour >= 5  && hour < 11) return { greeting: "Selamat Pagi",  tagline: "Yuk catat jualan pertama hari ini." };
-  if (hour >= 11 && hour < 15) return { greeting: "Selamat Siang",  tagline: "Pantau arus kas tokomu di sini." };
-  if (hour >= 15 && hour < 18) return { greeting: "Selamat Sore",   tagline: "Berapa yang laku hari ini?" };
-  return                               { greeting: "Selamat Malam",  tagline: "Waktunya rekap hasil jualan." };
+  if (hour >= 5 && hour < 11)
+    return {
+      greeting: "Selamat Pagi",
+      tagline: "Yuk catat jualan pertama hari ini.",
+    };
+  if (hour >= 11 && hour < 15)
+    return {
+      greeting: "Selamat Siang",
+      tagline: "Pantau arus kas tokomu di sini.",
+    };
+  if (hour >= 15 && hour < 18)
+    return { greeting: "Selamat Sore", tagline: "Berapa yang laku hari ini?" };
+  return { greeting: "Selamat Malam", tagline: "Waktunya rekap hasil jualan." };
 }
 
 function formatDateTime(date) {
   const dateStr = date.toLocaleDateString("id-ID", {
-    weekday: "long", day: "numeric", month: "short", year: "numeric",
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
   });
   const timeStr = date.toLocaleTimeString("id-ID", {
-    hour: "2-digit", minute: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
   return `${dateStr} • ${timeStr}`;
 }
@@ -28,8 +50,19 @@ function getInitials(name) {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-export default function Navbar({ theme, onToggleTheme, storeName = "", onExport, user = null, onLogin, onLogout, onEditStoreName, onScanClick }) {
+export default function Navbar({
+  theme,
+  onToggleTheme,
+  storeName = "",
+  onExport,
+  user = null,
+  onLogin,
+  onLogout,
+  onEditStoreName,
+  onScanClick,
+}) {
   const [now, setNow] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     setNow(new Date());
@@ -37,25 +70,45 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
     return () => clearInterval(id);
   }, []);
 
+  // Monitor online/offline status
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   const hour = now ? now.getHours() : new Date().getHours();
   const { greeting, tagline } = getGreeting(hour);
   const displayName = storeName || "Toko";
 
   return (
-    <header className="
+    <header
+      className="
       fixed top-0 left-0 right-0 z-40
       backdrop-blur-md
       bg-[#FAF9F6]/90 dark:bg-[#0C0C0B]/90
       border-b border-stone-200/50 dark:border-zinc-800/60
       transition-all duration-300
-    ">
-      <div className="
+    "
+    >
+      <div
+        className="
         flex items-center justify-between
         px-2.5 xs:px-4 md:px-6
         py-3
         max-w-none
         gap-2 sm:gap-3
-      ">
+      "
+      >
         {/* Avatar + greeting */}
         <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           <div className="relative group shrink-0">
@@ -63,10 +116,19 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
             <div className="relative flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-900 border border-white dark:border-zinc-800 text-[11px] font-black text-zinc-800 dark:text-white shadow-xs tracking-tight">
               {getInitials(storeName)}
             </div>
-            {/* Online indicator */}
-            <span className="absolute bottom-0 right-0 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border border-white dark:border-zinc-950" />
+            {/* Online/Offline indicator */}
+            <span
+              className="absolute bottom-0 right-0 flex h-3 w-3"
+              title={isOnline ? "Online" : "Offline"}
+            >
+              {isOnline ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border border-white dark:border-zinc-950" />
+                </>
+              ) : (
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white dark:border-zinc-950" />
+              )}
             </span>
           </div>
 
@@ -147,10 +209,11 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
             className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
             aria-label="Toggle Theme"
           >
-            {theme === "dark"
-              ? <Sun  className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" />
-              : <Moon className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" />
-            }
+            {theme === "dark" ? (
+              <Sun className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" />
+            ) : (
+              <Moon className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" />
+            )}
           </button>
         </div>
       </div>

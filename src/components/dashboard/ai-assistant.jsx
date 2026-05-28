@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send, Mic, RefreshCw, Trash2, Zap, Camera } from "lucide-react";
+import {
+  Sparkles,
+  X,
+  Send,
+  Mic,
+  RefreshCw,
+  Trash2,
+  Zap,
+  Camera,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/format";
 import {
@@ -13,6 +22,7 @@ import {
   setCachedResponse,
   clearAICache,
 } from "@/lib/ai-cache";
+import { mapAppError } from "@/lib/error-handler";
 
 // ─── Constants ───────────────────────────────────────────────────
 const WELCOME_MESSAGE = {
@@ -255,7 +265,7 @@ export default function AIAssistant({
   const [isTyping, setIsTyping] = useState(false);
   // Toggle: true = pakai Gemini AI, false = parser lokal (manual)
   const [useAI, setUseAI] = useState(true);
-  
+
   const [localMessages, setLocalMessages] = useState([
     { ...WELCOME_MESSAGE, timestamp: buildTimestamp() },
   ]);
@@ -309,12 +319,23 @@ export default function AIAssistant({
 
   useEffect(() => {
     if (clearSignal === 0) return;
-    setMessages([{ ...WELCOME_MESSAGE, id: Date.now().toString(), timestamp: buildTimestamp() }]);
+    setMessages([
+      {
+        ...WELCOME_MESSAGE,
+        id: Date.now().toString(),
+        timestamp: buildTimestamp(),
+      },
+    ]);
   }, [clearSignal]);
 
   useEffect(() => {
     if (resetSignal === 0) return;
-    setMessages((prev) => [...prev, buildAiMessage("**Dashboard berhasil direset!** Mari mulai pencatatan keuangan baru!")]);
+    setMessages((prev) => [
+      ...prev,
+      buildAiMessage(
+        "**Dashboard berhasil direset!** Mari mulai pencatatan keuangan baru!",
+      ),
+    ]);
   }, [resetSignal]);
 
   useEffect(() => {
@@ -393,7 +414,7 @@ export default function AIAssistant({
   const runFallbackParser = (trimmedText, warningText) => {
     const segments = splitIntoSegments(trimmedText);
     const prefix = warningText
-      ? `⚠️ **Peringatan:** ${warningText}\n\n*Asisten berjalan dalam mode offline lokal.*\n\n`
+      ? `Peringatan: ${warningText}\n\nAsisten berjalan dalam mode offline lokal.\n\n`
       : "";
 
     if (segments.length === 0) {
@@ -401,7 +422,7 @@ export default function AIAssistant({
         ...prev,
         buildAiMessage(
           prefix +
-          `Maaf Bos, saya belum memahami maksud pencatatan tersebut.\n\nContoh:\n• *"jual kopi 2 gelas 40rb"*\n• *"beli gas LPG 22rb"*`,
+            `Maaf Bos, saya belum memahami maksud pencatatan tersebut.\n\nContoh:\n• *"jual kopi 2 gelas 40rb"*\n• *"beli gas LPG 22rb"*`,
         ),
       ]);
       return;
@@ -471,7 +492,10 @@ export default function AIAssistant({
       const { response, transactions: cachedTxList = [] } = cached;
       setMessages((prev) => [
         ...prev,
-        buildAiMessage(response, cachedTxList.length > 0 ? cachedTxList[0] : null),
+        buildAiMessage(
+          response,
+          cachedTxList.length > 0 ? cachedTxList[0] : null,
+        ),
       ]);
       return;
     }
@@ -542,11 +566,12 @@ export default function AIAssistant({
           buildAiMessage(response, newTxList.length > 0 ? newTxList[0] : null),
         ]);
       } catch (err) {
-        console.error(err);
+        console.error("[AI_CHAT]", err);
         setIsTyping(false);
+        const { message } = mapAppError(err, "AI_CHAT");
         setMessages((prev) => [
           ...prev,
-          buildAiMessage(`❌ **Gagal memproses pesan:** ${err.message || "Terjadi masalah jaringan."}`),
+          buildAiMessage(`${message} Coba ulang sebentar lagi.`),
         ]);
       }
     })();
@@ -706,15 +731,19 @@ export default function AIAssistant({
         </div>
 
         {/* Input Container */}
-        <div className={cn(
-          "p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex flex-col shrink-0 input-bar-transition w-full",
-          "lg:border-t-0 lg:bg-transparent lg:max-w-2xl lg:mx-auto lg:p-0 lg:pb-4",
-          keyboardOpen ? "pb-3.5" : "safe-area-bottom pb-4"
-        )}>
-          <div className={cn(
-            "flex items-end gap-2 w-full",
-            "lg:border lg:border-stone-200/80 lg:dark:border-zinc-800/80 lg:bg-white/80 lg:dark:bg-[#0E0E0E]/80 lg:backdrop-blur-md lg:rounded-2xl lg:p-2.5 lg:shadow-md"
-          )}>
+        <div
+          className={cn(
+            "p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex flex-col shrink-0 input-bar-transition w-full",
+            "lg:border-t-0 lg:bg-transparent lg:max-w-2xl lg:mx-auto lg:p-0 lg:pb-4",
+            keyboardOpen ? "pb-3.5" : "safe-area-bottom pb-4",
+          )}
+        >
+          <div
+            className={cn(
+              "flex items-end gap-2 w-full",
+              "lg:border lg:border-stone-200/80 lg:dark:border-zinc-800/80 lg:bg-white/80 lg:dark:bg-[#0E0E0E]/80 lg:backdrop-blur-md lg:rounded-2xl lg:p-2.5 lg:shadow-md",
+            )}
+          >
             {/* Mic */}
             <button
               onClick={startVoice}
@@ -738,7 +767,11 @@ export default function AIAssistant({
             {/* Toggle AI / Manual */}
             <button
               onClick={() => setUseAI((v) => !v)}
-              title={useAI ? "Mode AI — klik untuk ganti ke Manual" : "Mode Manual — klik untuk ganti ke AI"}
+              title={
+                useAI
+                  ? "Mode AI — klik untuk ganti ke Manual"
+                  : "Mode Manual — klik untuk ganti ke AI"
+              }
               className={cn(
                 "flex shrink-0 items-center justify-center gap-1 px-2.5 h-10 lg:h-8 rounded-full border text-[10px] font-extrabold tracking-wide transition-all duration-300 cursor-pointer active:scale-95 mb-0.5",
                 useAI
@@ -751,7 +784,9 @@ export default function AIAssistant({
               ) : (
                 <Zap className="h-3 w-3" />
               )}
-              <span className="hidden xs:inline">{useAI ? "AI" : "Manual"}</span>
+              <span className="hidden xs:inline">
+                {useAI ? "AI" : "Manual"}
+              </span>
             </button>
 
             {/* Textarea + send button wrapper */}
@@ -770,7 +805,9 @@ export default function AIAssistant({
                 onFocus={() => {
                   // Delay to let the virtual keyboard fully expand, then scroll to bottom
                   setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                    messagesEndRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                    });
                   }, 300);
                 }}
                 placeholder={

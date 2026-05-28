@@ -27,9 +27,14 @@ import { supabase } from "@/lib/supabase";
 import { getGuestId } from "@/lib/guest-id";
 import LoginModal from "@/components/dashboard/login-modal";
 import LandingPage from "@/components/dashboard/landing-page";
-import { migrateGuestTransactions, fetchOrCreateProfile, updateProfileStoreName } from "@/lib/auth-handler";
+import {
+  migrateGuestTransactions,
+  fetchOrCreateProfile,
+  updateProfileStoreName,
+} from "@/lib/auth-handler";
 import { signOut } from "@/lib/auth";
 import { getDemoTransactions } from "@/lib/demo-data";
+import { mapAppError, isOnline } from "@/lib/error-handler";
 
 // ─── Supabase field mapping ────────────────────────────────────────
 // DB  : id, type, item_name, category, amount, qty, unit, created_at
@@ -60,6 +65,41 @@ function appToDb(tx) {
     qty: tx.qty ?? 1,
     unit: tx.unit ?? null,
   };
+}
+
+const OAUTH_HASH_KEYS = [
+  "access_token",
+  "refresh_token",
+  "expires_in",
+  "token_type",
+  "provider_token",
+  "provider_refresh_token",
+  "error",
+  "error_description",
+  "state",
+  "session_state",
+];
+
+function isOAuthFragment(hash) {
+  if (!hash) return false;
+  const normalized = hash.replace(/^#/, "");
+  const params = normalized.split("&").filter(Boolean);
+  if (params.length === 0) return false;
+  return params.every((pair) => {
+    const [key] = pair.split("=");
+    return OAUTH_HASH_KEYS.includes(key);
+  });
+}
+
+function cleanOAuthHashFragment() {
+  if (typeof window === "undefined") return;
+  const { hash, pathname, search } = window.location;
+  if (!hash) return;
+  const normalized = hash.replace(/^#/, "");
+  if (normalized === "" || isOAuthFragment(hash)) {
+    const newUrl = pathname + search;
+    window.history.replaceState({}, document.title, newUrl);
+  }
 }
 
 // ─── Desktop Sidebar ──────────────────────────────────────────────
@@ -247,7 +287,10 @@ function KasPanel({
             {aiInsights.length === 0 ? (
               <div className="py-10 px-5 rounded-2xl border border-dashed border-stone-200 dark:border-zinc-800/60 bg-gradient-to-b from-white/60 to-stone-50/30 dark:from-zinc-900/20 dark:to-zinc-950/10 flex flex-col items-center justify-center text-center">
                 <div className="relative mb-4">
-                  <div className="absolute -inset-2 rounded-full bg-indigo-500/8 dark:bg-indigo-500/5 blur-lg animate-pulse" style={{ animationDuration: '5s' }} />
+                  <div
+                    className="absolute -inset-2 rounded-full bg-indigo-500/8 dark:bg-indigo-500/5 blur-lg animate-pulse"
+                    style={{ animationDuration: "5s" }}
+                  />
                   <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-stone-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm">
                     <BrainCircuit className="h-6 w-6 text-zinc-300 dark:text-zinc-600" />
                   </div>
@@ -256,13 +299,17 @@ function KasPanel({
                   Analisis Belum Tersedia
                 </h4>
                 <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500 font-medium max-w-[260px] leading-relaxed">
-                  Catat beberapa transaksi agar AI dapat menganalisis kinerja bisnis Bos secara otomatis.
+                  Catat beberapa transaksi agar AI dapat menganalisis kinerja
+                  bisnis Bos secara otomatis.
                 </p>
               </div>
             ) : (
               <div className="rounded-2xl border border-stone-150 dark:border-zinc-900/60 bg-white dark:bg-zinc-900/40 p-4 space-y-3">
                 {aiInsights.map((insight) => (
-                  <div key={insight.id} className="flex items-start align-top gap-2.5">
+                  <div
+                    key={insight.id}
+                    className="flex items-start align-top gap-2.5"
+                  >
                     <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-stone-50 dark:bg-zinc-900 border border-stone-150 dark:border-zinc-800 shrink-0 mt-0.5">
                       {insight.icon}
                     </div>
@@ -406,29 +453,63 @@ export default function Home() {
   const [showLanding, setShowLanding] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [pendingGuestStart, setPendingGuestStart] = useState(false);
+  const authSessionUserIdRef = useRef(null);
+  const authInitRef = useRef(false);
+  const profileChannelRef = useRef(null);
   const keyboardTimerRef = useRef(null);
+
+  const requestGuestOnboarding = () => {
+    if (typeof window === "undefined") return;
+    setPendingGuestStart(true);
+    setShowLanding(false);
+    if (!localStorage.getItem("catetin-guest-id")) {
+      getGuestId();
+    }
+  };
+
+  useEffect(() => {
+    if (!authResolved || !pendingGuestStart) return;
+
+    const savedStore = localStorage.getItem("catetin-store-name")?.trim();
+    if (!savedStore) {
+      setShowSetup(true);
+    }
+    setPendingGuestStart(false);
+  }, [authResolved, pendingGuestStart]);
 
   // ── Theme & Store Name & Period & Auth & Demo init ──────────────────
   useEffect(() => {
+    if (authInitRef.current) return;
+    authInitRef.current = true;
+
+    cleanOAuthHashFragment();
     setMounted(true);
+
     const savedTheme = localStorage.getItem("catetin-theme") || "dark";
     setTheme(savedTheme);
     document.documentElement.classList.toggle("dark", savedTheme === "dark");
 
-    const savedStore = localStorage.getItem("catetin-store-name");
-    if (savedStore) {
-      setStoreName(savedStore);
-      setShowLanding(false);
-    }
-
     const savedPeriod = localStorage.getItem("catetin-period") || "all";
     setActivePeriod(savedPeriod);
 
-    // Register Service Worker for PWA
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+    const savedStoreName =
+      localStorage.getItem("catetin-store-name")?.trim() || null;
+    if (savedStoreName) {
+      setStoreName(savedStoreName);
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      "serviceWorker" in navigator &&
+      !window.__catetinSWRegistered
+    ) {
       navigator.serviceWorker.register("/sw.js").catch((err) => {
         console.error("Service Worker registration failed: ", err);
       });
+      window.__catetinSWRegistered = true;
     }
 
     // ── visualViewport keyboard detection ──────────────────────────
@@ -438,7 +519,7 @@ export default function Home() {
       const handleViewportResize = () => {
         const windowHeight = window.innerHeight;
         const viewportHeight = vv.height;
-        const isKbOpen = (windowHeight - viewportHeight) > KEYBOARD_THRESHOLD;
+        const isKbOpen = windowHeight - viewportHeight > KEYBOARD_THRESHOLD;
         // Debounce to avoid flicker during orientation changes
         clearTimeout(keyboardTimerRef.current);
         keyboardTimerRef.current = setTimeout(() => {
@@ -447,63 +528,119 @@ export default function Home() {
       };
       vv.addEventListener("resize", handleViewportResize);
       vv.addEventListener("scroll", handleViewportResize);
-      // Cleanup will be handled below
       const cleanupVV = () => {
         vv.removeEventListener("resize", handleViewportResize);
         vv.removeEventListener("scroll", handleViewportResize);
         clearTimeout(keyboardTimerRef.current);
       };
-      // Store cleanup for the return function
       window.__catVVCleanup = cleanupVV;
     }
 
     const isDemoMode = localStorage.getItem("catetin-demo") === "true";
     setIsDemo(isDemoMode);
 
-    if (isDemoMode) {
-      setTransactions(getDemoTransactions().map(dbToApp));
-      setStoreName("Kedai Kopi Bahagia");
-      setShowLanding(false);
-      setLoading(false);
-    } else {
-      // Get current auth session
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        const u = session?.user ?? null;
-        setUser(u);
-        if (u) {
-          setShowLanding(false);
-        }
-        fetchTransactions(u?.id);
-      });
-    }
+    const initializeAuth = async () => {
+      if (isDemoMode) {
+        setTransactions(getDemoTransactions().map(dbToApp));
+        setStoreName("Kedai Kopi Bahagia");
+        setShowLanding(false);
+        setLoading(false);
+        setAuthResolved(true);
+        setIsInitialLoading(false);
+        return;
+      }
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const currentUser = session?.user ?? null;
+        authSessionUserIdRef.current = currentUser?.id ?? null;
+        setUser(currentUser);
+
+        if (currentUser) {
+          setShowLanding(false);
+          const profile = await fetchOrCreateProfile(
+            currentUser.id,
+            savedStoreName,
+          );
+          if (profile?.store_name?.trim()) {
+            setStoreName(profile.store_name.trim());
+            localStorage.setItem(
+              "catetin-store-name",
+              profile.store_name.trim(),
+            );
+            setShowSetup(false);
+          } else {
+            setStoreName(savedStoreName || "");
+            setShowSetup(true);
+          }
+          fetchTransactions(currentUser.id);
+        } else if (savedStoreName) {
+          setStoreName(savedStoreName);
+          setShowLanding(false);
+          fetchTransactions(null);
+        } else {
+          setShowLanding(true);
+          fetchTransactions(null);
+        }
+      } catch (err) {
+        console.error("App initialization failed", err);
+        if (savedStoreName) {
+          setStoreName(savedStoreName);
+          setShowLanding(false);
+        } else {
+          setShowLanding(true);
+        }
+        fetchTransactions(null);
+      } finally {
+        setAuthResolved(true);
+        setIsInitialLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
+      const currentUserId = currentUser?.id ?? null;
+
+      if (
+        event === "SIGNED_IN" &&
+        currentUserId &&
+        currentUserId === authSessionUserIdRef.current
+      ) {
+        return;
+      }
+
+      authSessionUserIdRef.current = currentUserId;
       setUser(currentUser);
 
       if (event === "SIGNED_IN" && currentUser) {
         setIsDemo(false);
         localStorage.removeItem("catetin-demo");
         setShowLanding(false);
-        
-        // Trigger first-time store profile fetch/migration
-        const savedStore = localStorage.getItem("catetin-store-name");
+
+        const savedStore =
+          localStorage.getItem("catetin-store-name")?.trim() || null;
         const profile = await fetchOrCreateProfile(currentUser.id, savedStore);
-        if (profile && profile.store_name && profile.store_name !== "Toko Baru") {
-          setStoreName(profile.store_name);
-          localStorage.setItem("catetin-store-name", profile.store_name);
+        if (profile?.store_name?.trim()) {
+          setStoreName(profile.store_name.trim());
+          localStorage.setItem("catetin-store-name", profile.store_name.trim());
+          setShowSetup(false);
         } else {
+          setStoreName(savedStore || "");
           setShowSetup(true);
         }
-        
+
         const guestId = localStorage.getItem("catetin-guest-id");
         if (guestId) {
           toast.promise(migrateGuestTransactions(guestId, currentUser.id), {
             loading: "Memindahkan data transaksi lokal ke akun Anda...",
             success: (res) => {
               if (res.success && res.migratedCount > 0) {
-                // Clear guest ID upon successful migration
                 localStorage.removeItem("catetin-guest-id");
                 fetchTransactions(currentUser.id);
                 return `Data berhasil dipindahkan! (${res.migratedCount} transaksi)`;
@@ -518,6 +655,7 @@ export default function Home() {
         }
         setShowLoginModal(false);
       } else if (event === "SIGNED_OUT") {
+        authSessionUserIdRef.current = null;
         setIsDemo(false);
         localStorage.removeItem("catetin-demo");
         localStorage.removeItem("catetin-store-name");
@@ -529,7 +667,6 @@ export default function Home() {
 
     return () => {
       subscription.unsubscribe();
-      // Cleanup visualViewport listeners
       if (window.__catVVCleanup) {
         window.__catVVCleanup();
         delete window.__catVVCleanup;
@@ -539,14 +676,14 @@ export default function Home() {
 
   // Handle Supabase profiles realtime synchronization and profile fetching
   useEffect(() => {
-    if (typeof window === "undefined" || !user || isDemo) return;
+    if (typeof window === "undefined" || !user?.id || isDemo) return;
 
-    let profileChannel = null;
+    const userId = user.id;
 
     const syncProfile = async () => {
       try {
         const guestStore = localStorage.getItem("catetin-store-name");
-        const profile = await fetchOrCreateProfile(user.id, guestStore);
+        const profile = await fetchOrCreateProfile(userId, guestStore);
         if (profile && profile.store_name) {
           setStoreName(profile.store_name);
           localStorage.setItem("catetin-store-name", profile.store_name);
@@ -558,16 +695,15 @@ export default function Home() {
 
     syncProfile();
 
-    // Listen to changes in the profiles table in realtime (realtime subscription safety)
-    profileChannel = supabase
-      .channel(`profile-sync-${user.id}`)
+    profileChannelRef.current = supabase
+      .channel(`profile-sync-${userId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "profiles",
-          filter: `id=eq.${user.id}`,
+          filter: `id=eq.${userId}`,
         },
         (payload) => {
           console.log("Realtime profile sync event:", payload);
@@ -575,19 +711,23 @@ export default function Home() {
             setStoreName(payload.new.store_name);
             localStorage.setItem("catetin-store-name", payload.new.store_name);
           }
-        }
+        },
       )
       .subscribe((status) => {
-        console.log(`Realtime profiles subscription status for ${user.id}:`, status);
+        console.log(
+          `Realtime profiles subscription status for ${userId}:`,
+          status,
+        );
       });
 
     return () => {
-      if (profileChannel) {
-        console.log(`Cleaning up realtime profile channel for ${user.id}`);
-        supabase.removeChannel(profileChannel);
+      if (profileChannelRef.current) {
+        console.log(`Cleaning up realtime profile channel for ${userId}`);
+        supabase.removeChannel(profileChannelRef.current);
+        profileChannelRef.current = null;
       }
     };
-  }, [user, isDemo]);
+  }, [user?.id, isDemo]);
 
   const handleStoreNameComplete = async (name) => {
     // 1. Optimistic Update: instantly update local state & cache
@@ -601,7 +741,7 @@ export default function Home() {
       const res = await updateProfileStoreName(user.id, name);
       if (!res.success) {
         toast.error("Gagal menyinkronkan nama usaha ke server.", {
-          description: res.error || "Silakan periksa koneksi internet Anda."
+          description: res.error || "Silakan periksa koneksi internet Anda.",
         });
 
         // Revert local cache/state to actual database value if sync failed
@@ -621,7 +761,8 @@ export default function Home() {
       const isMobile = window.innerWidth < 1024; // lg breakpoint
       if (isMobile && activeTab === "chat") {
         document.body.classList.add("no-scroll");
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isIOS =
+          /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         if (isIOS) {
           document.body.classList.add("no-scroll-ios");
         }
@@ -661,7 +802,8 @@ export default function Home() {
       : await query.eq("session_id", getGuestId());
 
     if (error) {
-      toast.error("Gagal memuat data", { description: error.message });
+      const { title, message } = mapAppError(error, "SUPABASE");
+      toast.error(title, { description: message });
     } else {
       setTransactions((data ?? []).map(dbToApp));
     }
@@ -705,7 +847,8 @@ export default function Home() {
       .select();
 
     if (error) {
-      toast.error("Gagal menyimpan transaksi struk", { description: error.message });
+      const { title, message } = mapAppError(error, "SUPABASE");
+      toast.error(title, { description: message });
       return;
     }
 
@@ -768,7 +911,8 @@ export default function Home() {
       .single();
 
     if (error) {
-      toast.error("Gagal menyimpan transaksi", { description: error.message });
+      const { title, message } = mapAppError(error, "SUPABASE");
+      toast.error(title, { description: message });
       return;
     }
 
@@ -821,7 +965,8 @@ export default function Home() {
       .eq("id", id);
 
     if (error) {
-      toast.error("Gagal mengubah transaksi", { description: error.message });
+      const { title, message } = mapAppError(error, "SUPABASE");
+      toast.error(title, { description: message });
       return;
     }
 
@@ -860,7 +1005,8 @@ export default function Home() {
     const { error } = await supabase.from("transactions").delete().eq("id", id);
 
     if (error) {
-      toast.error("Gagal menghapus transaksi", { description: error.message });
+      const { title, message } = mapAppError(error, "SUPABASE");
+      toast.error(title, { description: message });
       return;
     }
 
@@ -889,7 +1035,8 @@ export default function Home() {
       : await query.eq("session_id", getGuestId());
 
     if (error) {
-      toast.error("Gagal mereset data", { description: error.message });
+      const { title, message } = mapAppError(error, "SUPABASE");
+      toast.error(title, { description: message });
       return;
     }
 
@@ -932,23 +1079,41 @@ export default function Home() {
     .reduce((s, tx) => s + tx.amount, 0);
   const totalProfit = totalIncome - totalExpense;
 
+  const renderInitialLoading = () => (
+    <div className="min-h-screen bg-[#0C0C0B] text-zinc-100 flex items-center justify-center px-6">
+      <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#111214]/95 p-8 shadow-2xl shadow-emerald-500/10 backdrop-blur-xl transition-opacity duration-500">
+        <div className="flex items-center justify-center h-16 w-16 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-400 shadow-2xl shadow-emerald-500/20 mx-auto">
+          <Sparkles className="h-8 w-8 text-white" />
+        </div>
+        <div className="mt-6 space-y-4 text-center">
+          <div className="h-3 rounded-full bg-zinc-800 animate-pulse mx-auto w-3/5" />
+          <div className="h-3 rounded-full bg-zinc-800 animate-pulse mx-auto w-2/5" />
+          <p className="mt-3 text-sm text-zinc-400">
+            Menyiapkan Catetin AI... Memuat data dengan aman agar tampilan tidak
+            melompat.
+          </p>
+        </div>
+        <div className="mt-8 grid gap-3">
+          {[1, 2, 3].map((idx) => (
+            <div
+              key={idx}
+              className="h-12 rounded-3xl bg-zinc-900/80 animate-pulse"
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   if (!mounted) return <div className="min-h-screen bg-[#0C0C0B]" />;
+  if (isInitialLoading) return renderInitialLoading();
 
   if (showLanding) {
     return (
       <>
         <LandingPage
           onStartGuest={() => {
-            setShowLanding(false);
-            const savedStore = localStorage.getItem("catetin-store-name");
-            if (!savedStore) {
-              setShowSetup(true);
-            } else {
-              setStoreName(savedStore);
-            }
-            if (!localStorage.getItem("catetin-guest-id")) {
-              getGuestId();
-            }
+            requestGuestOnboarding();
           }}
           onStartDemo={() => {
             setIsDemo(true);
@@ -967,14 +1132,7 @@ export default function Home() {
             onClose={() => setShowLoginModal(false)}
             onContinueAsGuest={() => {
               setShowLoginModal(false);
-              setShowLanding(false);
-              const savedStore = localStorage.getItem("catetin-store-name");
-              if (!savedStore) {
-                setShowSetup(true);
-              }
-              if (!localStorage.getItem("catetin-guest-id")) {
-                getGuestId();
-              }
+              requestGuestOnboarding();
             }}
             isMigrating={false}
           />
@@ -1000,9 +1158,43 @@ export default function Home() {
         user={user}
         onLogin={() => setShowLoginModal(true)}
         onLogout={async () => {
-          if (confirm("Apakah Anda ingin keluar dari akun?")) {
-            await signOut();
+          if (!confirm("Apakah Anda ingin keluar dari akun?")) return;
+
+          // Optimistic local logout: reset UI state immediately
+          try {
+            setUser(null);
+            setShowLanding(true);
+            setShowLoginModal(false);
+            setShowSetup(false);
+            setTransactions([]);
+
+            // Unsubscribe from realtime/profile channel if any
+            try {
+              if (
+                profileChannelRef.current &&
+                typeof profileChannelRef.current.unsubscribe === "function"
+              ) {
+                profileChannelRef.current.unsubscribe();
+              }
+            } catch (e) {
+              console.warn(
+                "Failed to unsubscribe profile channel during logout:",
+                e,
+              );
+            }
+
+            // Inform user immediately
             toast.success("Berhasil keluar.");
+
+            // Attempt remote sign out, but do not block or rollback UI if offline
+            try {
+              await signOut();
+            } catch (err) {
+              console.warn("signOut failed (continuing local logout):", err);
+            }
+          } catch (err) {
+            console.error("Logout error:", err);
+            toast.error("Gagal melakukan logout.");
           }
         }}
         onEditStoreName={() => setShowEditSetup(true)}
@@ -1043,11 +1235,13 @@ export default function Home() {
       )}
 
       {/* ── Mobile & Tablet (<1024px): full-width, bottom nav ── */}
-      <div className={cn(
-        "lg:hidden flex flex-col h-dvh fixed inset-0 overflow-hidden",
-        isDemo ? "pt-[108px]" : "pt-[72px]",
-        keyboardOpen ? "pb-0" : "pb-[68px]"
-      )}>
+      <div
+        className={cn(
+          "lg:hidden flex flex-col h-dvh fixed inset-0 overflow-hidden",
+          isDemo ? "pt-[108px]" : "pt-[72px]",
+          keyboardOpen ? "pb-0" : "pb-[68px]",
+        )}
+      >
         {activeTab === "chat" && (
           <div className="flex-1 flex flex-col overflow-hidden">
             <AIAssistant
@@ -1083,10 +1277,12 @@ export default function Home() {
         )}
 
         {/* Bottom nav — hides smoothly when keyboard is open */}
-        <div className={cn(
-          "fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around safe-area-bottom bottom-nav-transition",
-          keyboardOpen && "bottom-nav-hidden"
-        )}>
+        <div
+          className={cn(
+            "fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around safe-area-bottom bottom-nav-transition",
+            keyboardOpen && "bottom-nav-hidden",
+          )}
+        >
           {[
             { id: "kas", label: "Buku Kas", Icon: BarChart3 },
             { id: "chat", label: "Asisten AI", Icon: Sparkles },
@@ -1113,7 +1309,12 @@ export default function Home() {
       </div>
 
       {/* ── Desktop (≥1024px): sidebar kiri + konten ── */}
-      <div className={cn("hidden lg:flex h-screen", isDemo ? "pt-[108px]" : "pt-[72px]")}>
+      <div
+        className={cn(
+          "hidden lg:flex h-screen",
+          isDemo ? "pt-[108px]" : "pt-[72px]",
+        )}
+      >
         <DesktopSidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -1182,11 +1383,7 @@ export default function Home() {
         />
       )}
 
-      {showSetup && (
-        <StoreSetupModal
-          onComplete={handleStoreNameComplete}
-        />
-      )}
+      {showSetup && <StoreSetupModal onComplete={handleStoreNameComplete} />}
 
       {showEditSetup && (
         <StoreSetupModal

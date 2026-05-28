@@ -1,7 +1,15 @@
 import { useState, useRef, useEffect } from "react";
-import { Camera, ImagePlus, LoaderCircle, AlertCircle, Sparkles, X } from "lucide-react";
+import {
+  Camera,
+  ImagePlus,
+  LoaderCircle,
+  AlertCircle,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReceiptPreview from "./receipt-preview";
+import { mapAppError } from "@/lib/error-handler";
 
 export default function ReceiptScanner({ onSave, onClose }) {
   const [file, setFile] = useState(null);
@@ -46,8 +54,9 @@ export default function ReceiptScanner({ onSave, onClose }) {
       const compressed = await compressImage(selectedFile);
       uploadAndScan(compressed.base64, compressed.mimeType);
     } catch (err) {
-      console.error(err);
-      setErrorMsg(err.message || "Gagal memproses gambar.");
+      console.error("[RECEIPT_COMPRESS]", err);
+      const { message } = mapAppError(err, "RECEIPT_SCAN");
+      setErrorMsg(message);
       setStatus("error");
     }
   };
@@ -86,7 +95,12 @@ export default function ReceiptScanner({ onSave, onClose }) {
             mimeType: "image/jpeg",
           });
         };
-        img.onerror = () => reject(new Error("Gagal membaca orientasi gambar struk. Pastikan file valid."));
+        img.onerror = () =>
+          reject(
+            new Error(
+              "Gagal membaca orientasi gambar struk. Pastikan file valid.",
+            ),
+          );
         img.src = event.target.result;
       };
       reader.onerror = () => reject(new Error("Gagal membaca file gambar."));
@@ -106,7 +120,10 @@ export default function ReceiptScanner({ onSave, onClose }) {
       if (!res.ok) {
         const errData = await res.json();
         if (res.status === 429 || errData.error === "RATE_LIMIT_EXCEEDED") {
-          localStorage.setItem("catetin-ai-quota-exceeded", Date.now().toString());
+          localStorage.setItem(
+            "catetin-ai-quota-exceeded",
+            Date.now().toString(),
+          );
           setIsQuotaExceeded(true);
         }
         throw new Error(errData.message || "Gagal menganalisa struk belanja.");
@@ -115,7 +132,7 @@ export default function ReceiptScanner({ onSave, onClose }) {
       const data = await res.json();
       if (!data.success) {
         throw new Error(
-          "Struk tidak terbaca atau format kurang jelas. Coba foto ulang dengan cahaya lebih terang."
+          "Struk tidak terbaca atau format kurang jelas. Coba foto ulang dengan cahaya lebih terang.",
         );
       }
 
@@ -123,8 +140,9 @@ export default function ReceiptScanner({ onSave, onClose }) {
       setParsedResults(data.items || []);
       setStatus("review");
     } catch (err) {
-      console.error(err);
-      setErrorMsg(err.message || "Koneksi terganggu. Gagal menghubungi server.");
+      console.error("[RECEIPT_SCAN]", err);
+      const { message } = mapAppError(err, "RECEIPT_SCAN");
+      setErrorMsg(message);
       setStatus("error");
     }
   };
@@ -144,7 +162,10 @@ export default function ReceiptScanner({ onSave, onClose }) {
   if (status === "review" && parsedResults) {
     return (
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} />
+        <div
+          className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+          onClick={onClose}
+        />
         <div className="relative w-full sm:max-w-2xl bg-white dark:bg-zinc-950 rounded-t-3xl sm:rounded-3xl shadow-2xl animate-slide-up overflow-hidden max-h-[90dvh] sm:max-h-[85vh] flex flex-col">
           <div className="sm:hidden w-10 h-1 rounded-full bg-zinc-200 dark:bg-zinc-800 mx-auto my-3" />
           <ReceiptPreview
@@ -161,7 +182,10 @@ export default function ReceiptScanner({ onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+        onClick={onClose}
+      />
 
       {/* Sheet panel */}
       <div className="relative w-full sm:max-w-md bg-white dark:bg-zinc-950 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slide-up max-h-[90dvh] overflow-y-auto">
@@ -185,7 +209,8 @@ export default function ReceiptScanner({ onSave, onClose }) {
             Scan Struk Belanja
           </h3>
           <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400 font-medium max-w-[280px] mx-auto leading-relaxed">
-            Foto nota atau struk belanja toko Bos. AI akan membaca item, nominal, dan kategori secara otomatis.
+            Foto nota atau struk belanja toko Bos. AI akan membaca item,
+            nominal, dan kategori secara otomatis.
           </p>
         </div>
 
@@ -194,9 +219,13 @@ export default function ReceiptScanner({ onSave, onClose }) {
           <div className="mb-5 p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 text-amber-700 dark:text-amber-400 flex items-start gap-2.5">
             <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
             <div className="text-left space-y-1">
-              <h4 className="text-xs font-black uppercase tracking-wider">Kuota Harian AI Habis</h4>
+              <h4 className="text-xs font-black uppercase tracking-wider">
+                Kuota Harian AI Habis
+              </h4>
               <p className="text-[11px] font-medium leading-relaxed">
-                Buku Kas: Kuota pemindaian struk harian Bos hari ini sudah habis. Silakan coba kembali besok atau gunakan input manual/suara.
+                Buku Kas: Kuota pemindaian struk harian Bos hari ini sudah
+                habis. Silakan coba kembali besok atau gunakan input
+                manual/suara.
               </p>
             </div>
           </div>
@@ -206,13 +235,15 @@ export default function ReceiptScanner({ onSave, onClose }) {
         {status === "idle" && (
           <div className="space-y-3">
             <button
-              onClick={() => !isQuotaExceeded && cameraInputRef.current?.click()}
+              onClick={() =>
+                !isQuotaExceeded && cameraInputRef.current?.click()
+              }
               disabled={isQuotaExceeded}
               className={cn(
                 "w-full py-4 px-4 rounded-2xl text-xs font-extrabold tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg",
                 isQuotaExceeded
                   ? "bg-zinc-100 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-600 border border-zinc-200 dark:border-zinc-800/80 cursor-not-allowed shadow-none"
-                  : "bg-gradient-to-r from-emerald-500 to-teal-500 text-black hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] cursor-pointer shadow-emerald-500/10"
+                  : "bg-gradient-to-r from-emerald-500 to-teal-500 text-black hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] cursor-pointer shadow-emerald-500/10",
               )}
             >
               <Camera className="h-4.5 w-4.5 stroke-[2.5]" />
@@ -220,13 +251,15 @@ export default function ReceiptScanner({ onSave, onClose }) {
             </button>
 
             <button
-              onClick={() => !isQuotaExceeded && galleryInputRef.current?.click()}
+              onClick={() =>
+                !isQuotaExceeded && galleryInputRef.current?.click()
+              }
               disabled={isQuotaExceeded}
               className={cn(
                 "w-full py-4 px-4 rounded-2xl border text-xs font-extrabold tracking-wider uppercase flex items-center justify-center gap-2 transition-all",
                 isQuotaExceeded
                   ? "bg-zinc-100 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-600 border-zinc-200 dark:border-zinc-800/80 cursor-not-allowed"
-                  : "border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-stone-50 dark:hover:bg-zinc-800 active:scale-[0.98] cursor-pointer"
+                  : "border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-stone-50 dark:hover:bg-zinc-800 active:scale-[0.98] cursor-pointer",
               )}
             >
               <ImagePlus className="h-4.5 w-4.5" />
@@ -280,7 +313,9 @@ export default function ReceiptScanner({ onSave, onClose }) {
               <AlertCircle className="h-8 w-8" />
             </div>
             <div className="space-y-1">
-              <h4 className="text-xs font-black text-rose-600 dark:text-rose-400">Pembacaan Struk Gagal</h4>
+              <h4 className="text-xs font-black text-rose-600 dark:text-rose-400">
+                Pembacaan Struk Gagal
+              </h4>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed">
                 {errorMsg}
               </p>
@@ -293,7 +328,7 @@ export default function ReceiptScanner({ onSave, onClose }) {
                   "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95",
                   isQuotaExceeded
                     ? "bg-zinc-100 dark:bg-zinc-850 text-zinc-400 cursor-not-allowed"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/80 cursor-pointer"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/80 cursor-pointer",
                 )}
               >
                 Coba Lagi

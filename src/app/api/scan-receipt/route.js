@@ -45,10 +45,15 @@ export async function POST(req) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("API Error: GEMINI_API_KEY is not defined in env variables.");
+      console.error(
+        "API Error: GEMINI_API_KEY is not defined in env variables.",
+      );
       return NextResponse.json(
-        { error: "GEMINI_API_KEY_MISSING", message: "API Key Gemini belum diatur di .env.local" },
-        { status: 400 }
+        {
+          error: "GEMINI_API_KEY_MISSING",
+          message: "API Key Gemini belum diatur di .env.local",
+        },
+        { status: 400 },
       );
     }
 
@@ -58,15 +63,22 @@ export async function POST(req) {
     if (!image || !mimeType) {
       console.error("API Error: Missing image or mimeType in request body.");
       return NextResponse.json(
-        { error: "INVALID_REQUEST", message: "Gambar atau tipe MIME tidak boleh kosong" },
-        { status: 400 }
+        {
+          error: "INVALID_REQUEST",
+          message: "Gambar atau tipe MIME tidak boleh kosong",
+        },
+        { status: 400 },
       );
     }
 
-    console.log(`Received image. MIME type: ${mimeType}. Size of payload: ${image.length} chars.`);
+    console.log(
+      `Received image. MIME type: ${mimeType}. Size of payload: ${image.length} chars.`,
+    );
 
     // Clean base64 string safely by splitting at ";base64,"
-    const base64Data = image.includes(";base64,") ? image.split(";base64,").pop() : image;
+    const base64Data = image.includes(";base64,")
+      ? image.split(";base64,").pop()
+      : image;
     console.log("Cleaned base64 payload prefix successfully.");
 
     const systemInstruction = `
@@ -126,11 +138,13 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
           properties: {
             success: {
               type: "boolean",
-              description: "True jika gambar adalah struk/nota valid dan berhasil diproses. False jika bukan struk atau gambar rusak/tidak terbaca.",
+              description:
+                "True jika gambar adalah struk/nota valid dan berhasil diproses. False jika bukan struk atau gambar rusak/tidak terbaca.",
             },
             merchantName: {
               type: "string",
-              description: "Nama toko/merchant (e.g. 'Indomaret'). Kosongkan atau null jika tidak terdeteksi.",
+              description:
+                "Nama toko/merchant (e.g. 'Indomaret'). Kosongkan atau null jika tidak terdeteksi.",
             },
             items: {
               type: "array",
@@ -141,11 +155,13 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
                   type: {
                     type: "string",
                     enum: ["income", "expense"],
-                    description: "Tipe transaksi. Default adalah 'expense' untuk belanja.",
+                    description:
+                      "Tipe transaksi. Default adalah 'expense' untuk belanja.",
                   },
                   item: {
                     type: "string",
-                    description: "Nama barang yang dibeli/dijual bersih dan rapi (Title Case). E.g. 'Gula Pasir'.",
+                    description:
+                      "Nama barang yang dibeli/dijual bersih dan rapi (Title Case). E.g. 'Gula Pasir'.",
                   },
                   qty: {
                     type: "number",
@@ -153,15 +169,24 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
                   },
                   unit: {
                     type: "string",
-                    description: "Satuan unit (e.g. 'pcs', 'kg', 'porsi') atau null jika tidak ada.",
+                    description:
+                      "Satuan unit (e.g. 'pcs', 'kg', 'porsi') atau null jika tidak ada.",
                   },
                   amount: {
                     type: "number",
-                    description: "Total harga transaksi untuk baris item ini saja (bukan harga satuan).",
+                    description:
+                      "Total harga transaksi untuk baris item ini saja (bukan harga satuan).",
                   },
                   category: {
                     type: "string",
-                    enum: ["food", "shopping", "bills", "salary", "rent", "other"],
+                    enum: [
+                      "food",
+                      "shopping",
+                      "bills",
+                      "salary",
+                      "rent",
+                      "other",
+                    ],
                     description: "Klasifikasi kategori item tersebut.",
                   },
                 },
@@ -190,20 +215,25 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
     try {
       parsedData = JSON.parse(cleanText);
     } catch (parseErr) {
-      console.error("Failed to parse JSON response from Gemini. Raw response was:", responseText, parseErr);
+      console.error(
+        "Failed to parse JSON response from Gemini. Raw response was:",
+        responseText,
+        parseErr,
+      );
       return NextResponse.json(
         {
           error: "INVALID_JSON_RESPONSE",
-          message: "AI tidak mengembalikan format data yang valid. Silakan coba kembali dengan foto struk yang lebih jelas."
+          message:
+            "AI tidak mengembalikan format data yang valid. Silakan coba kembali dengan foto struk yang lebih jelas.",
         },
-        { status: 422 }
+        { status: 422 },
       );
     }
 
     if (parsedData.items && Array.isArray(parsedData.items)) {
-      parsedData.items = parsedData.items.map(item => ({
+      parsedData.items = parsedData.items.map((item) => ({
         ...item,
-        unit: normalizeUnit(item.unit)
+        unit: normalizeUnit(item.unit),
       }));
     }
 
@@ -223,18 +253,20 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
       return NextResponse.json(
         {
           error: "RATE_LIMIT_EXCEEDED",
-          message: "Kuota harian Gemini AI sudah habis. Silakan coba kembali nanti.",
+          message:
+            "Kuota harian Gemini AI sudah habis. Silakan coba kembali nanti.",
         },
-        { status: 429 }
+        { status: 429 },
       );
     }
 
     return NextResponse.json(
       {
         error: "API_ERROR",
-        message: `Gagal memproses struk. Alasan: ${error.message || "Terjadi kesalahan internal"}`
+        message:
+          "Gagal membaca struk. Coba ambil foto yang lebih jelas dengan pencahayaan yang cukup.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -6,8 +6,11 @@ export async function POST(req) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "GEMINI_API_KEY_MISSING", message: "API Key Gemini belum diatur di .env.local" },
-        { status: 400 }
+        {
+          error: "GEMINI_API_KEY_MISSING",
+          message: "API Key Gemini belum diatur di .env.local",
+        },
+        { status: 400 },
       );
     }
 
@@ -16,7 +19,7 @@ export async function POST(req) {
     if (!message) {
       return NextResponse.json(
         { error: "INVALID_REQUEST", message: "Pesan tidak boleh kosong" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -75,54 +78,65 @@ Kategori harus salah satu dari: "food", "shopping", "bills", "salary", "rent", "
           properties: {
             response: {
               type: "string",
-              description: "Jawaban percakapan asisten (dapat mengandung markdown format, gunakan Bahasa Indonesia ramah Bos)."
+              description:
+                "Jawaban percakapan asisten (dapat mengandung markdown format, gunakan Bahasa Indonesia ramah Bos).",
             },
             transactions: {
               type: "array",
-              description: "Daftar transaksi baru yang perlu disimpan ke database dari pesan terakhir. Kosongkan [] jika hanya tanya jawab biasa.",
+              description:
+                "Daftar transaksi baru yang perlu disimpan ke database dari pesan terakhir. Kosongkan [] jika hanya tanya jawab biasa.",
               items: {
                 type: "object",
                 properties: {
                   type: {
                     type: "string",
                     enum: ["income", "expense"],
-                    description: "Tipe transaksi."
+                    description: "Tipe transaksi.",
                   },
                   item: {
                     type: "string",
-                    description: "Nama item / deskripsi transaksi (e.g. 'Buah Leci')."
+                    description:
+                      "Nama item / deskripsi transaksi (e.g. 'Buah Leci').",
                   },
                   qty: {
                     type: "number",
-                    description: "Jumlah barang."
+                    description: "Jumlah barang.",
                   },
                   unit: {
                     type: "string",
-                    description: "Satuan unit (e.g. 'kg', 'pcs', 'porsi') atau null jika tidak disebutkan."
+                    description:
+                      "Satuan unit (e.g. 'kg', 'pcs', 'porsi') atau null jika tidak disebutkan.",
                   },
                   amount: {
                     type: "number",
-                    description: "Nominal uang total transaksi ini dalam Rupiah."
+                    description:
+                      "Nominal uang total transaksi ini dalam Rupiah.",
                   },
                   category: {
                     type: "string",
-                    enum: ["food", "shopping", "bills", "salary", "rent", "other"],
-                    description: "Kategori pengeluaran/pemasukan."
-                  }
+                    enum: [
+                      "food",
+                      "shopping",
+                      "bills",
+                      "salary",
+                      "rent",
+                      "other",
+                    ],
+                    description: "Kategori pengeluaran/pemasukan.",
+                  },
                 },
-                required: ["type", "item", "qty", "amount", "category"]
-              }
-            }
+                required: ["type", "item", "qty", "amount", "category"],
+              },
+            },
           },
-          required: ["response", "transactions"]
-        }
-      }
+          required: ["response", "transactions"],
+        },
+      },
     });
-
 
     const result = await chat.sendMessage(message);
     const responseText = result.response.text();
-    
+
     // Parse the JSON response
     const parsedData = JSON.parse(responseText);
 
@@ -148,13 +162,16 @@ Kategori harus salah satu dari: "food", "shopping", "bills", "salary", "rent", "
           message: "Kuota Gemini AI harian sudah habis.",
           retryAfter,
         },
-        { status: 429 }
+        { status: 429 },
       );
     }
 
     return NextResponse.json(
-      { error: "API_ERROR", message: error.message || "Terjadi kesalahan internal" },
-      { status: 500 }
+      {
+        error: "API_ERROR",
+        message: "Asisten AI sedang bermasalah. Coba lagi nanti.",
+      },
+      { status: 500 },
     );
   }
 }
