@@ -51,15 +51,16 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
     ">
       <div className="
         flex items-center justify-between
-        px-4 md:px-6
+        px-2.5 xs:px-4 md:px-6
         py-3
         max-w-none
+        gap-2 sm:gap-3
       ">
         {/* Avatar + greeting */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           <div className="relative group shrink-0">
             <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 opacity-50 blur-xs transition duration-300 group-hover:opacity-90" />
-            <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-900 border border-white dark:border-zinc-800 text-[11px] font-black text-zinc-800 dark:text-white shadow-xs tracking-tight">
+            <div className="relative flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-900 border border-white dark:border-zinc-800 text-[11px] font-black text-zinc-800 dark:text-white shadow-xs tracking-tight">
               {getInitials(storeName)}
             </div>
             {/* Online indicator */}
@@ -70,7 +71,7 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
           </div>
 
           <div className="flex flex-col min-w-0">
-            <h1 className="text-md font-bold tracking-tight text-zinc-900 dark:text-white leading-tight flex items-center gap-1.5 min-w-0">
+            <h1 className="text-xs sm:text-sm md:text-md font-bold tracking-tight text-zinc-900 dark:text-white leading-tight flex items-center gap-1 sm:gap-1.5 min-w-0">
               <span className="truncate">
                 {greeting},&nbsp;
                 <span className="font-extrabold">{displayName}</span>
@@ -96,16 +97,16 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-2 shrink-0 ml-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-2">
           {/* Scan Receipt Shortcut */}
           {onScanClick && (
             <button
               onClick={onScanClick}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
+              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
               aria-label="Scan Struk Belanja"
               title="Scan Struk Belanja"
             >
-              <Camera className="h-4 w-4" />
+              <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
           )}
           {/* Export shortcut */}
@@ -123,19 +124,19 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
           {user ? (
             <button
               onClick={onLogout}
-              className="flex h-9 px-3 items-center justify-center gap-1.5 rounded-xl border border-stone-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-bold shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
+              className="flex h-8 px-2 sm:h-9 sm:px-3 items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-stone-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 text-[10px] sm:text-xs font-bold shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
               title="Keluar Akun"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span className="hidden sm:inline">Keluar</span>
             </button>
           ) : (
             <button
               onClick={onLogin}
-              className="flex h-9 px-3 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold shadow-2xs hover:bg-emerald-500/15 transition-all duration-300 cursor-pointer active:scale-95"
+              className="flex h-8 px-2 sm:h-9 sm:px-3 items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] sm:text-xs font-bold shadow-2xs hover:bg-emerald-500/15 transition-all duration-300 cursor-pointer active:scale-95"
               title="Amankan Data Keuangan"
             >
-              <Cloud className="h-3.5 w-3.5 animate-pulse" />
+              <Cloud className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-pulse" />
               <span className="hidden sm:inline">Amankan Data</span>
             </button>
           )}
@@ -143,12 +144,12 @@ export default function Navbar({ theme, onToggleTheme, storeName = "", onExport,
           {/* Theme toggle */}
           <button
             onClick={onToggleTheme}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
+            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
             aria-label="Toggle Theme"
           >
             {theme === "dark"
-              ? <Sun  className="h-[17px] w-[17px]" />
-              : <Moon className="h-[17px] w-[17px]" />
+              ? <Sun  className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" />
+              : <Moon className="h-[15px] w-[15px] sm:h-[17px] sm:w-[17px]" />
             }
           </button>
         </div>

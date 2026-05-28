@@ -275,6 +275,10 @@ export default function AIAssistant({
     const tx = textareaRef.current;
     if (tx) {
       tx.style.height = "auto";
+      if (input.trim() === "") {
+        // Reset to minimum height (controlled by CSS)
+        return;
+      }
       const newHeight = Math.min(tx.scrollHeight, 120);
       tx.style.height = `${newHeight}px`;
     }
@@ -671,55 +675,63 @@ export default function AIAssistant({
             inline ? "flex-1" : "h-[280px]",
           )}
         >
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))}
-          {isTyping && (
-            <div className="self-start bg-white dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-900/80 rounded-2xl rounded-tl-sm p-3.5 flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce" />
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.2s]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.4s]" />
-            </div>
-          )}
-          <div ref={messagesEndRef} />
+          <div className="w-full lg:max-w-2xl lg:mx-auto flex flex-col space-y-3.5">
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} msg={msg} />
+            ))}
+            {isTyping && (
+              <div className="self-start bg-white dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-900/80 rounded-2xl rounded-tl-sm p-3.5 flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce" />
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.2s]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.4s]" />
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
         {/* Suggestions */}
-        <div className="flex gap-2 overflow-x-auto px-4 py-2 border-t border-stone-200/50 dark:border-zinc-900/60 bg-white/60 dark:bg-[#0C0C0B]/60 scrollbar-none shrink-0">
-          {SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              onClick={() => handleSend(s)}
-              className="whitespace-nowrap shrink-0 text-[10px] font-extrabold px-3 py-1.5 rounded-full border border-stone-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 hover:bg-emerald-50/60 dark:hover:bg-emerald-500/10 text-zinc-600 dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/30 transition-all duration-300 cursor-pointer active:scale-95 shadow-3xs"
-            >
-              {s}
-            </button>
-          ))}
+        <div className="flex gap-2 overflow-x-auto px-4 py-2 border-t border-stone-200/50 dark:border-zinc-900/60 bg-white/60 dark:bg-[#0C0C0B]/60 scrollbar-none shrink-0 justify-start lg:justify-center">
+          <div className="flex gap-2 overflow-x-auto scrollbar-none w-full lg:max-w-2xl lg:mx-auto">
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => handleSend(s)}
+                className="whitespace-nowrap shrink-0 text-[10px] font-extrabold px-3 py-1.5 rounded-full border border-stone-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 hover:bg-emerald-50/60 dark:hover:bg-emerald-500/10 text-zinc-600 dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/30 transition-all duration-300 cursor-pointer active:scale-95 shadow-3xs"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Input Container */}
         <div className={cn(
-          "p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex flex-col shrink-0 input-bar-transition",
+          "p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex flex-col shrink-0 input-bar-transition w-full",
+          "lg:border-t-0 lg:bg-transparent lg:max-w-2xl lg:mx-auto lg:p-0 lg:pb-4",
           keyboardOpen ? "pb-3.5" : "safe-area-bottom pb-4"
         )}>
-          <div className="flex items-end gap-2 w-full">
+          <div className={cn(
+            "flex items-end gap-2 w-full",
+            "lg:border lg:border-stone-200/80 lg:dark:border-zinc-800/80 lg:bg-white/80 lg:dark:bg-[#0E0E0E]/80 lg:backdrop-blur-md lg:rounded-2xl lg:p-2.5 lg:shadow-md"
+          )}>
             {/* Mic */}
             <button
               onClick={startVoice}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90 mb-0.5"
+              className="flex h-10 w-10 lg:h-8 lg:w-8 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90 mb-0.5"
               title="Input suara"
             >
-              <Mic className="h-5 w-5" />
+              <Mic className="h-5 w-5 lg:h-4 lg:w-4" />
             </button>
 
             {/* Camera Scan Receipt */}
             {onScanClick && (
               <button
                 onClick={onScanClick}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90 mb-0.5"
+                className="flex h-10 w-10 lg:h-8 lg:w-8 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90 mb-0.5"
                 title="Scan struk belanja"
               >
-                <Camera className="h-5 w-5" />
+                <Camera className="h-5 w-5 lg:h-4 lg:w-4" />
               </button>
             )}
 
@@ -728,7 +740,7 @@ export default function AIAssistant({
               onClick={() => setUseAI((v) => !v)}
               title={useAI ? "Mode AI — klik untuk ganti ke Manual" : "Mode Manual — klik untuk ganti ke AI"}
               className={cn(
-                "flex shrink-0 items-center justify-center gap-1 px-2.5 h-10 rounded-full border text-[10px] font-extrabold tracking-wide transition-all duration-300 cursor-pointer active:scale-95 mb-0.5",
+                "flex shrink-0 items-center justify-center gap-1 px-2.5 h-10 lg:h-8 rounded-full border text-[10px] font-extrabold tracking-wide transition-all duration-300 cursor-pointer active:scale-95 mb-0.5",
                 useAI
                   ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15"
                   : "bg-amber-400/10 border-amber-400/30 text-amber-600 dark:text-amber-400 hover:bg-amber-400/15",
@@ -764,21 +776,21 @@ export default function AIAssistant({
                 placeholder={
                   useAI
                     ? "Tanya atau catat transaksi..."
-                    : "Tulis transaksi Bos (mode manual)..."
+                    : "Tulis transaksi Bos..."
                 }
-                className="w-full resize-none rounded-2xl border border-stone-200 dark:border-zinc-800 pl-4 pr-11 py-2 text-xs font-semibold shadow-3xs bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50 transition-colors max-h-[120px] min-h-[38px] leading-relaxed overflow-y-auto"
+                className="w-full resize-none rounded-2xl border border-stone-200 dark:border-zinc-800 pl-4 pr-11 py-3 md:py-2 text-[12px] md:text-xs font-semibold shadow-3xs bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50 transition-colors max-h-[120px] min-h-[38px] lg:min-h-[34px] lg:py-1.5 lg:pl-3.5 lg:pr-10 leading-relaxed overflow-y-auto"
               />
               <button
                 onClick={() => handleSend()}
                 disabled={!input.trim()}
                 className={cn(
-                  "absolute right-1 bottom-1 flex h-8 w-8 items-center justify-center rounded-full text-white transition-all cursor-pointer",
+                  "absolute right-1 bottom-1 flex h-8 w-8 lg:h-7 lg:w-7 items-center justify-center rounded-full text-white transition-all cursor-pointer",
                   input.trim()
                     ? "bg-emerald-500 hover:bg-emerald-600 active:scale-95"
                     : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 pointer-events-none scale-90",
                 )}
               >
-                <Send className="h-3.5 w-3.5" />
+                <Send className="h-3.5 w-3.5 lg:h-3 lg:w-3" />
               </button>
             </div>
           </div>

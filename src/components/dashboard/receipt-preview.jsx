@@ -111,9 +111,9 @@ function AccordionHeader({ item, index, isOpen, onToggle, onDelete, catConfig })
         )}>
           {amountDisplay ? `Rp ${amountDisplay}` : "Rp 0"}
         </p>
-        {item.qty > 1 && (
+        {(item.qty > 1 || (item.unit && item.unit !== "null")) && (
           <p className="text-[9px] font-bold text-zinc-400 mt-0.5">
-            x{item.qty} {item.unit || ""}
+            x{item.qty} {(!item.unit || item.unit === "null") ? "" : item.unit}
           </p>
         )}
       </div>
@@ -122,10 +122,10 @@ function AccordionHeader({ item, index, isOpen, onToggle, onDelete, catConfig })
       <div className="flex items-center gap-1 shrink-0">
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="p-1.5 rounded-lg text-zinc-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer opacity-0 group-hover/header:opacity-100 focus:opacity-100 duration-200"
+          className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-500 dark:text-zinc-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer duration-200"
           title="Hapus Item"
         >
-          <Trash2 className="h-3 w-3" />
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
         <div className="text-zinc-400 transition-transform duration-300" style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
           <ChevronDown className="h-4 w-4" />
@@ -141,7 +141,7 @@ export default function ReceiptPreview({ items = [], onSave, onCancel, merchantN
       id: `scanned-${index}-${Date.now()}`,
       item: item.item || item.item_name || "",
       qty: item.qty || 1,
-      unit: item.unit || "",
+      unit: (item.unit && item.unit !== "null") ? item.unit : "",
       amount: item.amount || 0,
       category: item.category || "other",
       type: item.type || "expense",
@@ -216,7 +216,7 @@ export default function ReceiptPreview({ items = [], onSave, onCancel, merchantN
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950">
+    <div className="flex flex-col flex-1 min-h-0 bg-white dark:bg-zinc-950">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200/50 dark:border-zinc-900/60 shrink-0">
         <div>
@@ -245,7 +245,7 @@ export default function ReceiptPreview({ items = [], onSave, onCancel, merchantN
       </div>
 
       {/* Accordion Item List */}
-      <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-3 space-y-2 max-h-[60vh] sm:max-h-[550px]">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-3 space-y-2">
         {editedItems.length === 0 ? (
           <div className="text-center py-10">
             <AlertCircle className="h-8 w-8 text-zinc-400 mx-auto mb-2" />
@@ -377,29 +377,42 @@ export default function ReceiptPreview({ items = [], onSave, onCancel, merchantN
                         </div>
                       </div>
 
-                      {/* Type Selector */}
-                      <div className="col-span-12 pt-0.5">
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5 block">
-                          Tipe Transaksi
-                        </span>
-                        <div className="flex gap-2 w-fit">
-                          {[
-                            { id: "expense", label: "Pengeluaran", color: "bg-rose-500 text-white" },
-                            { id: "income", label: "Pemasukan", color: "bg-emerald-500 text-white" },
-                          ].map((t) => (
-                            <button
-                              key={t.id}
-                              onClick={() => handleFieldChange(item.id, "type", t.id)}
-                              className={cn(
-                                "px-3 py-1.5 rounded-lg text-[9px] font-extrabold tracking-wide uppercase transition-all cursor-pointer active:scale-95",
-                                item.type === t.id
-                                  ? t.color
-                                  : "bg-stone-200/40 dark:bg-zinc-800/50 text-zinc-500 hover:bg-stone-200/70"
-                              )}
-                            >
-                              {t.label}
-                            </button>
-                          ))}
+                      {/* Type Selector & Delete Button */}
+                      <div className="col-span-12 pt-1 border-t border-stone-100 dark:border-zinc-900/50 mt-1 flex items-center justify-between">
+                        <div>
+                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5 block">
+                            Tipe Transaksi
+                          </span>
+                          <div className="flex gap-2 w-fit">
+                            {[
+                              { id: "expense", label: "Pengeluaran", color: "bg-rose-500 text-white animate-fade-in" },
+                              { id: "income", label: "Pemasukan", color: "bg-emerald-500 text-white animate-fade-in" },
+                            ].map((t) => (
+                              <button
+                                key={t.id}
+                                onClick={() => handleFieldChange(item.id, "type", t.id)}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-lg text-[9px] font-extrabold tracking-wide uppercase transition-all cursor-pointer active:scale-95",
+                                  item.type === t.id
+                                    ? t.color
+                                    : "bg-stone-200/40 dark:bg-zinc-800/50 text-zinc-500 hover:bg-stone-200/70"
+                                )}
+                              >
+                                {t.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="self-end">
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900/55 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-extrabold uppercase tracking-wide transition-all cursor-pointer active:scale-95"
+                            title="Hapus Item"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Hapus Item
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -412,7 +425,7 @@ export default function ReceiptPreview({ items = [], onSave, onCancel, merchantN
       </div>
 
       {/* Sticky Footer */}
-      <div className="p-4 sm:p-5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-stone-50/50 dark:bg-zinc-950/50 shrink-0 space-y-3 safe-area-bottom pb-5">
+      <div className="p-4 sm:p-5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-stone-50/80 dark:bg-zinc-950/80 backdrop-blur-md shrink-0 space-y-3 safe-area-bottom pb-5 sticky bottom-0 z-10">
         {editedItems.length > 0 && (
           <div className="flex justify-between items-center px-1">
             <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Total {editedItems.length} Item:</span>

@@ -27,7 +27,7 @@ import { supabase } from "@/lib/supabase";
 import { getGuestId } from "@/lib/guest-id";
 import LoginModal from "@/components/dashboard/login-modal";
 import LandingPage from "@/components/dashboard/landing-page";
-import { migrateGuestTransactions } from "@/lib/auth-handler";
+import { migrateGuestTransactions, fetchOrCreateProfile, updateProfileStoreName } from "@/lib/auth-handler";
 import { signOut } from "@/lib/auth";
 import { getDemoTransactions } from "@/lib/demo-data";
 
@@ -487,9 +487,13 @@ export default function Home() {
         localStorage.removeItem("catetin-demo");
         setShowLanding(false);
         
-        // Trigger store setup for first-time Google login users
+        // Trigger first-time store profile fetch/migration
         const savedStore = localStorage.getItem("catetin-store-name");
-        if (!savedStore) {
+        const profile = await fetchOrCreateProfile(currentUser.id, savedStore);
+        if (profile && profile.store_name && profile.store_name !== "Toko Baru") {
+          setStoreName(profile.store_name);
+          localStorage.setItem("catetin-store-name", profile.store_name);
+        } else {
           setShowSetup(true);
         }
         
@@ -516,6 +520,8 @@ export default function Home() {
       } else if (event === "SIGNED_OUT") {
         setIsDemo(false);
         localStorage.removeItem("catetin-demo");
+        localStorage.removeItem("catetin-store-name");
+        setStoreName("");
         setShowLanding(true);
         fetchTransactions(null);
       }
@@ -530,6 +536,83 @@ export default function Home() {
       }
     };
   }, []);
+
+  // Handle Supabase profiles realtime synchronization and profile fetching
+  useEffect(() => {
+    if (typeof window === "undefined" || !user || isDemo) return;
+
+    let profileChannel = null;
+
+    const syncProfile = async () => {
+      try {
+        const guestStore = localStorage.getItem("catetin-store-name");
+        const profile = await fetchOrCreateProfile(user.id, guestStore);
+        if (profile && profile.store_name) {
+          setStoreName(profile.store_name);
+          localStorage.setItem("catetin-store-name", profile.store_name);
+        }
+      } catch (err) {
+        console.error("Error syncing profile on user state change:", err);
+      }
+    };
+
+    syncProfile();
+
+    // Listen to changes in the profiles table in realtime (realtime subscription safety)
+    profileChannel = supabase
+      .channel(`profile-sync-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log("Realtime profile sync event:", payload);
+          if (payload.new && payload.new.store_name) {
+            setStoreName(payload.new.store_name);
+            localStorage.setItem("catetin-store-name", payload.new.store_name);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log(`Realtime profiles subscription status for ${user.id}:`, status);
+      });
+
+    return () => {
+      if (profileChannel) {
+        console.log(`Cleaning up realtime profile channel for ${user.id}`);
+        supabase.removeChannel(profileChannel);
+      }
+    };
+  }, [user, isDemo]);
+
+  const handleStoreNameComplete = async (name) => {
+    // 1. Optimistic Update: instantly update local state & cache
+    setStoreName(name);
+    localStorage.setItem("catetin-store-name", name);
+    setShowSetup(false);
+    setShowEditSetup(false);
+
+    // 2. Cloud Sync if user is authenticated and not in demo mode
+    if (user && !isDemo) {
+      const res = await updateProfileStoreName(user.id, name);
+      if (!res.success) {
+        toast.error("Gagal menyinkronkan nama usaha ke server.", {
+          description: res.error || "Silakan periksa koneksi internet Anda."
+        });
+
+        // Revert local cache/state to actual database value if sync failed
+        const profile = await fetchOrCreateProfile(user.id, null);
+        if (profile && profile.store_name) {
+          setStoreName(profile.store_name);
+          localStorage.setItem("catetin-store-name", profile.store_name);
+        }
+      }
+    }
+  };
 
   // Handle body scroll locking when mobile chat is active
   useEffect(() => {
@@ -1101,10 +1184,7 @@ export default function Home() {
 
       {showSetup && (
         <StoreSetupModal
-          onComplete={(name) => {
-            setStoreName(name);
-            setShowSetup(false);
-          }}
+          onComplete={handleStoreNameComplete}
         />
       )}
 
@@ -1112,9 +1192,8 @@ export default function Home() {
         <StoreSetupModal
           initialValue={storeName}
           onClose={() => setShowEditSetup(false)}
-          onComplete={(name) => {
-            setStoreName(name);
-            setShowEditSetup(false);
+          onComplete={async (name) => {
+            await handleStoreNameComplete(name);
             toast.success("Nama usaha berhasil diperbarui!");
           }}
         />

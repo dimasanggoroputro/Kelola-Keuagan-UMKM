@@ -1,6 +1,45 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
+function normalizeUnit(unit) {
+  if (!unit) return null;
+  let u = unit.trim().toLowerCase().replace(/\./g, ""); // e.g. "kg." -> "kg"
+  const mappings = {
+    kg: "kg",
+    kilogram: "kg",
+    kilograms: "kg",
+    pcs: "pcs",
+    pc: "pcs",
+    bks: "bungkus",
+    bungkus: "bungkus",
+    bgk: "bungkus",
+    g: "gram",
+    gr: "gram",
+    gram: "gram",
+    grm: "gram",
+    liter: "liter",
+    ltr: "liter",
+    l: "liter",
+    ml: "ml",
+    mili: "ml",
+    biji: "biji",
+    bj: "biji",
+    pack: "pack",
+    pck: "pack",
+    botol: "botol",
+    btl: "botol",
+    dus: "dus",
+    box: "dus",
+    sachet: "sachet",
+    sch: "sachet",
+    porsi: "porsi",
+    prs: "porsi",
+    gelas: "gelas",
+    gls: "gelas",
+  };
+  return mappings[u] || u;
+}
+
 export async function POST(req) {
   console.log("=== START AI RECEIPT SCANNER API ===");
   try {
@@ -48,7 +87,8 @@ PANDUAN PARSING:
    - "other": Item lain yang tidak masuk kategori di atas.
 6. Bersihkan nama item dari angka, simbol harga, atau kuantitas. Buat menjadi Title Case (kapitalisasi huruf depan tiap kata, e.g. "Minyak Goreng Bimoli").
 7. Ekstrak nominal total belanja per item (qty * unit price) secara bersih dalam angka Rupiah tanpa simbol Rp atau titik/koma ribuan.
-8. Deteksi kuantitas (qty) dan satuan unit (misal: "kg", "pcs", "porsi", "botol", "bungkus"). Jika unit tidak disebutkan, berikan null.
+8. Deteksi kuantitas (qty) dan satuan unit yang jelas (e.g. "kg", "gram", "g", "liter", "ml", "pcs", "biji", "bungkus", "pack", "botol", "dus", "sachet", "porsi", "gelas").
+   Wajib deteksi unit ini jika ada di teks struk (misal '2 kg Gula' -> qty=2, unit='kg'). Jangan pernah mengembalikan null jika ada satuan unit yang jelas tertera di struk.
 `;
 
     console.log("Initializing Google Generative AI...");
@@ -158,6 +198,13 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
         },
         { status: 422 }
       );
+    }
+
+    if (parsedData.items && Array.isArray(parsedData.items)) {
+      parsedData.items = parsedData.items.map(item => ({
+        ...item,
+        unit: normalizeUnit(item.unit)
+      }));
     }
 
     console.log("=== END API - SUCCESS ===");

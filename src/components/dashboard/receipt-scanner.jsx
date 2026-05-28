@@ -145,7 +145,7 @@ export default function ReceiptScanner({ onSave, onClose }) {
     return (
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} />
-        <div className="relative w-full sm:max-w-2xl bg-white dark:bg-zinc-950 rounded-t-3xl sm:rounded-3xl shadow-2xl animate-slide-up overflow-hidden max-h-[90dvh] sm:max-h-[85vh]">
+        <div className="relative w-full sm:max-w-2xl bg-white dark:bg-zinc-950 rounded-t-3xl sm:rounded-3xl shadow-2xl animate-slide-up overflow-hidden max-h-[90dvh] sm:max-h-[85vh] flex flex-col">
           <div className="sm:hidden w-10 h-1 rounded-full bg-zinc-200 dark:bg-zinc-800 mx-auto my-3" />
           <ReceiptPreview
             items={parsedResults}
