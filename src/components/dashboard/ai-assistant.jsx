@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send, Mic, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Sparkles, X, Send, Mic, RefreshCw, Trash2, Zap, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/format";
 import {
@@ -247,6 +247,7 @@ export default function AIAssistant({
   transactions = [],
   messages: externalMessages,
   setMessages: externalSetMessages,
+  onScanClick,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -684,6 +685,17 @@ export default function AIAssistant({
           >
             <Mic className="h-5 w-5" />
           </button>
+
+          {/* Camera Scan Receipt */}
+          {onScanClick && (
+            <button
+              onClick={onScanClick}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90"
+              title="Scan struk belanja"
+            >
+              <Camera className="h-5 w-5" />
+            </button>
+          )}
 
           {/* Toggle AI / Manual */}
           <button

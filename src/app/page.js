@@ -10,6 +10,7 @@ import CategoryDonutChart from "@/components/dashboard/financial-charts";
 import EditTransactionModal from "@/components/dashboard/edit-transaction-modal";
 import StoreSetupModal from "@/components/dashboard/store-setup-modal";
 import ExportPanel from "@/components/dashboard/export-panel";
+import ReceiptScanner from "@/components/dashboard/receipt-scanner";
 import {
   Sparkles,
   BarChart3,
@@ -261,16 +262,16 @@ function KasPanel({
             ) : (
               <div className="rounded-2xl border border-stone-150 dark:border-zinc-900/60 bg-white dark:bg-zinc-900/40 p-4 space-y-3">
                 {aiInsights.map((insight) => (
-                  <div key={insight.id} className="flex items-start gap-2.5">
+                  <div key={insight.id} className="flex items-start align-top gap-2.5">
                     <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-stone-50 dark:bg-zinc-900 border border-stone-150 dark:border-zinc-800 shrink-0 mt-0.5">
                       {insight.icon}
                     </div>
                     <p
-                      className="text-sm text-zinc-700 dark:text-zinc-300 font-medium leading-relaxed"
+                      className="text-[13px] text-zinc-700 dark:text-zinc-300 font-medium leading-relaxed"
                       dangerouslySetInnerHTML={{
                         __html: insight.text.replace(
                           /\*\*(.*?)\*\*/g,
-                          '<strong class="font-extrabold text-zinc-900 dark:text-white">$1</strong>',
+                          '<strong class="font-bold text-zinc-900 dark:text-white">$1</strong>',
                         ),
                       }}
                     />
@@ -403,6 +404,7 @@ export default function Home() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
+  const [showScanner, setShowScanner] = useState(false);
 
   // ── Theme & Store Name & Period & Auth & Demo init ──────────────────
   useEffect(() => {
@@ -515,6 +517,53 @@ export default function Home() {
     }
     setLoading(false);
   }
+
+  const handleSaveReceiptTransactions = async (newTxs) => {
+    if (localStorage.getItem("catetin-demo") === "true") {
+      const mappedList = newTxs.map((tx, idx) => ({
+        id: `demo-sim-${Date.now()}-${idx}`,
+        type: tx.type,
+        item: tx.item,
+        category: tx.category ?? "other",
+        amount: tx.amount,
+        qty: tx.qty ?? 1,
+        unit: tx.unit ?? null,
+        createdAt: new Date().toISOString(),
+        time: new Date().toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      }));
+      setTransactions((prev) => [...mappedList, ...prev]);
+      setShowScanner(false);
+      toast.success(`${newTxs.length} transaksi demo berhasil disimpan.`);
+      return;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    const guestId = getGuestId();
+
+    const insertPayloads = newTxs.map((tx) => ({
+      ...appToDb(tx),
+      ...(userId ? { user_id: userId } : { session_id: guestId }),
+    }));
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert(insertPayloads)
+      .select();
+
+    if (error) {
+      toast.error("Gagal menyimpan transaksi struk", { description: error.message });
+      return;
+    }
+
+    const mapped = (data ?? []).map(dbToApp);
+    setTransactions((prev) => [...mapped, ...prev]);
+    setShowScanner(false);
+    toast.success(`${newTxs.length} transaksi berhasil disimpan dari struk.`);
+  };
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -807,6 +856,7 @@ export default function Home() {
           }
         }}
         onEditStoreName={() => setShowEditSetup(true)}
+        onScanClick={() => setShowScanner(true)}
       />
 
       {isDemo && (
@@ -855,6 +905,7 @@ export default function Home() {
               transactions={transactions}
               messages={chatMessages}
               setMessages={setChatMessages}
+              onScanClick={() => setShowScanner(true)}
             />
           </div>
         )}
@@ -937,6 +988,7 @@ export default function Home() {
               transactions={transactions}
               messages={chatMessages}
               setMessages={setChatMessages}
+              onScanClick={() => setShowScanner(true)}
             />
           </div>
 
@@ -965,6 +1017,13 @@ export default function Home() {
       </div>
 
       {/* Modals & Panels */}
+      {showScanner && (
+        <ReceiptScanner
+          onSave={handleSaveReceiptTransactions}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
       {showSetup && (
         <StoreSetupModal
           onComplete={(name) => {

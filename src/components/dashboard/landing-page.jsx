@@ -186,7 +186,7 @@ export default function LandingPage({ onStartGuest, onStartDemo, onLogin }) {
         {/* Footer */}
         <footer className="mt-20 pt-8 border-t border-zinc-900 w-full text-center">
           <p className="text-[10px] font-bold text-zinc-600">
-            &copy; {new Date().getFullYear()} Catetin AI. Built with ❤️ for Indonesian UMKM. All rights reserved.
+            &copy; {new Date().getFullYear()} Catetin AI. Built for Indonesian UMKM. All rights reserved.
           </p>
         </footer>
       </main>
