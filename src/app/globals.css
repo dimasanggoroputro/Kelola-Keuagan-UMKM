@@ -214,3 +214,63 @@
 .animate-fade-in        { animation: fadeIn 0.2s ease forwards; }
 .animate-fade-in-up     { animation: fadeInUp 0.3s ease forwards; }
 .animate-highlight-new  { animation: highlightNew 1.4s ease forwards; }
+
+/* ── Mobile Viewport & Keyboard Handling ─────────────────────────── */
+
+/* Dynamic viewport height: uses dvh where available, falls back to vh */
+@supports (height: 100dvh) {
+  .h-dvh { height: 100dvh !important; }
+  .min-h-dvh { min-height: 100dvh !important; }
+  .max-h-dvh { max-height: 100dvh !important; }
+}
+@supports not (height: 100dvh) {
+  .h-dvh { height: 100vh !important; height: -webkit-fill-available !important; }
+  .min-h-dvh { min-height: 100vh !important; min-height: -webkit-fill-available !important; }
+  .max-h-dvh { max-height: 100vh !important; }
+}
+
+/* Safe area insets for notch/home-indicator phones */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Prevent body scroll when chat/modal is active */
+body.no-scroll {
+  overflow: hidden !important;
+  position: fixed;
+  width: 100%;
+  -webkit-overflow-scrolling: none;
+  touch-action: none;
+}
+/* iOS: prevent overscroll bounce on body */
+body.no-scroll-ios {
+  overflow: hidden !important;
+}
+
+/* Bottom nav smooth hide/show transition */
+.bottom-nav-transition {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.22s ease;
+  will-change: transform, opacity;
+}
+.bottom-nav-hidden {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Input bar smooth keyboard transition */
+.input-bar-transition {
+  transition: padding-bottom 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s ease;
+  will-change: padding-bottom;
+}
+
+/* Overscroll containment for chat area */
+.overscroll-contain {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}

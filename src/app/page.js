@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Navbar from "@/components/dashboard/navbar";
 import StatsCard from "@/components/dashboard/stats-card";
 import RecentTransactions from "@/components/dashboard/recent-transactions";
@@ -405,6 +405,8 @@ export default function Home() {
   const [isDemo, setIsDemo] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const keyboardTimerRef = useRef(null);
 
   // ── Theme & Store Name & Period & Auth & Demo init ──────────────────
   useEffect(() => {
@@ -427,6 +429,32 @@ export default function Home() {
       navigator.serviceWorker.register("/sw.js").catch((err) => {
         console.error("Service Worker registration failed: ", err);
       });
+    }
+
+    // ── visualViewport keyboard detection ──────────────────────────
+    const vv = window.visualViewport;
+    if (vv) {
+      const KEYBOARD_THRESHOLD = 150; // px difference to consider keyboard open
+      const handleViewportResize = () => {
+        const windowHeight = window.innerHeight;
+        const viewportHeight = vv.height;
+        const isKbOpen = (windowHeight - viewportHeight) > KEYBOARD_THRESHOLD;
+        // Debounce to avoid flicker during orientation changes
+        clearTimeout(keyboardTimerRef.current);
+        keyboardTimerRef.current = setTimeout(() => {
+          setKeyboardOpen(isKbOpen);
+        }, 50);
+      };
+      vv.addEventListener("resize", handleViewportResize);
+      vv.addEventListener("scroll", handleViewportResize);
+      // Cleanup will be handled below
+      const cleanupVV = () => {
+        vv.removeEventListener("resize", handleViewportResize);
+        vv.removeEventListener("scroll", handleViewportResize);
+        clearTimeout(keyboardTimerRef.current);
+      };
+      // Store cleanup for the return function
+      window.__catVVCleanup = cleanupVV;
     }
 
     const isDemoMode = localStorage.getItem("catetin-demo") === "true";
@@ -458,6 +486,13 @@ export default function Home() {
         setIsDemo(false);
         localStorage.removeItem("catetin-demo");
         setShowLanding(false);
+        
+        // Trigger store setup for first-time Google login users
+        const savedStore = localStorage.getItem("catetin-store-name");
+        if (!savedStore) {
+          setShowSetup(true);
+        }
+        
         const guestId = localStorage.getItem("catetin-guest-id");
         if (guestId) {
           toast.promise(migrateGuestTransactions(guestId, currentUser.id), {
@@ -486,8 +521,40 @@ export default function Home() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      // Cleanup visualViewport listeners
+      if (window.__catVVCleanup) {
+        window.__catVVCleanup();
+        delete window.__catVVCleanup;
+      }
+    };
   }, []);
+
+  // Handle body scroll locking when mobile chat is active
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleScrollLock = () => {
+      const isMobile = window.innerWidth < 1024; // lg breakpoint
+      if (isMobile && activeTab === "chat") {
+        document.body.classList.add("no-scroll");
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+          document.body.classList.add("no-scroll-ios");
+        }
+      } else {
+        document.body.classList.remove("no-scroll", "no-scroll-ios");
+      }
+    };
+
+    handleScrollLock();
+    window.addEventListener("resize", handleScrollLock);
+
+    return () => {
+      document.body.classList.remove("no-scroll", "no-scroll-ios");
+      window.removeEventListener("resize", handleScrollLock);
+    };
+  }, [activeTab]);
 
   async function fetchTransactions(userId = null) {
     if (localStorage.getItem("catetin-demo") === "true") {
@@ -893,7 +960,11 @@ export default function Home() {
       )}
 
       {/* ── Mobile & Tablet (<1024px): full-width, bottom nav ── */}
-      <div className={cn("lg:hidden flex flex-col h-screen fixed inset-0 pb-[68px] overflow-hidden", isDemo ? "pt-[108px]" : "pt-[72px]")}>
+      <div className={cn(
+        "lg:hidden flex flex-col h-dvh fixed inset-0 overflow-hidden",
+        isDemo ? "pt-[108px]" : "pt-[72px]",
+        keyboardOpen ? "pb-0" : "pb-[68px]"
+      )}>
         {activeTab === "chat" && (
           <div className="flex-1 flex flex-col overflow-hidden">
             <AIAssistant
@@ -906,6 +977,7 @@ export default function Home() {
               messages={chatMessages}
               setMessages={setChatMessages}
               onScanClick={() => setShowScanner(true)}
+              keyboardOpen={keyboardOpen}
             />
           </div>
         )}
@@ -927,8 +999,11 @@ export default function Home() {
           />
         )}
 
-        {/* Bottom nav */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around">
+        {/* Bottom nav — hides smoothly when keyboard is open */}
+        <div className={cn(
+          "fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around safe-area-bottom bottom-nav-transition",
+          keyboardOpen && "bottom-nav-hidden"
+        )}>
           {[
             { id: "kas", label: "Buku Kas", Icon: BarChart3 },
             { id: "chat", label: "Asisten AI", Icon: Sparkles },

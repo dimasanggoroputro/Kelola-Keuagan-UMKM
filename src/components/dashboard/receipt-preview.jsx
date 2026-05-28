@@ -412,7 +412,7 @@ export default function ReceiptPreview({ items = [], onSave, onCancel, merchantN
       </div>
 
       {/* Sticky Footer */}
-      <div className="p-4 sm:p-5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-stone-50/50 dark:bg-zinc-950/50 shrink-0 space-y-3">
+      <div className="p-4 sm:p-5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-stone-50/50 dark:bg-zinc-950/50 shrink-0 space-y-3 safe-area-bottom pb-5">
         {editedItems.length > 0 && (
           <div className="flex justify-between items-center px-1">
             <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Total {editedItems.length} Item:</span>

@@ -248,6 +248,7 @@ export default function AIAssistant({
   messages: externalMessages,
   setMessages: externalSetMessages,
   onScanClick,
+  keyboardOpen, // Add this here
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -267,6 +268,27 @@ export default function AIAssistant({
 
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null); // Add textareaRef
+
+  // Adjust textarea height dynamically based on content
+  useEffect(() => {
+    const tx = textareaRef.current;
+    if (tx) {
+      tx.style.height = "auto";
+      const newHeight = Math.min(tx.scrollHeight, 120);
+      tx.style.height = `${newHeight}px`;
+    }
+  }, [input]);
+
+  // Auto-scroll on keyboard open/close
+  useEffect(() => {
+    if (keyboardOpen) {
+      const timer = setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 250); // Delay to let visualViewport animation finish
+      return () => clearTimeout(timer);
+    }
+  }, [keyboardOpen]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -645,7 +667,7 @@ export default function AIAssistant({
         {/* Messages */}
         <div
           className={cn(
-            "flex flex-col overflow-y-auto px-4 py-3.5 space-y-3.5 bg-[#FAF9F6]/25 dark:bg-[#0C0C0B]/25 scrollbar-none",
+            "flex flex-col overflow-y-auto px-4 py-3.5 space-y-3.5 bg-[#FAF9F6]/25 dark:bg-[#0C0C0B]/25 scrollbar-none overscroll-contain",
             inline ? "flex-1" : "h-[280px]",
           )}
         >
@@ -663,7 +685,7 @@ export default function AIAssistant({
         </div>
 
         {/* Suggestions */}
-        <div className="flex gap-2 overflow-x-auto px-4 py-2 border-t border-stone-200/50 dark:border-zinc-900/60 bg-white/60 dark:bg-[#0C0C0B]/60 scrollbar-none">
+        <div className="flex gap-2 overflow-x-auto px-4 py-2 border-t border-stone-200/50 dark:border-zinc-900/60 bg-white/60 dark:bg-[#0C0C0B]/60 scrollbar-none shrink-0">
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
@@ -675,73 +697,90 @@ export default function AIAssistant({
           ))}
         </div>
 
-        {/* Input */}
-        <div className="p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex items-center gap-2">
-          {/* Mic */}
-          <button
-            onClick={startVoice}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90"
-            title="Input suara"
-          >
-            <Mic className="h-5 w-5" />
-          </button>
-
-          {/* Camera Scan Receipt */}
-          {onScanClick && (
+        {/* Input Container */}
+        <div className={cn(
+          "p-3.5 border-t border-stone-200/50 dark:border-zinc-900/60 bg-[#FAF9F6]/40 dark:bg-[#0C0C0B]/40 flex flex-col shrink-0 input-bar-transition",
+          keyboardOpen ? "pb-3.5" : "safe-area-bottom pb-4"
+        )}>
+          <div className="flex items-end gap-2 w-full">
+            {/* Mic */}
             <button
-              onClick={onScanClick}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90"
-              title="Scan struk belanja"
+              onClick={startVoice}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90 mb-0.5"
+              title="Input suara"
             >
-              <Camera className="h-5 w-5" />
+              <Mic className="h-5 w-5" />
             </button>
-          )}
 
-          {/* Toggle AI / Manual */}
-          <button
-            onClick={() => setUseAI((v) => !v)}
-            title={useAI ? "Mode AI — klik untuk ganti ke Manual" : "Mode Manual — klik untuk ganti ke AI"}
-            className={cn(
-              "flex shrink-0 items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-extrabold tracking-wide transition-all duration-300 cursor-pointer active:scale-95",
-              useAI
-                ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15"
-                : "bg-amber-400/10 border-amber-400/30 text-amber-600 dark:text-amber-400 hover:bg-amber-400/15",
+            {/* Camera Scan Receipt */}
+            {onScanClick && (
+              <button
+                onClick={onScanClick}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90 mb-0.5"
+                title="Scan struk belanja"
+              >
+                <Camera className="h-5 w-5" />
+              </button>
             )}
-          >
-            {useAI ? (
-              <Sparkles className="h-3 w-3" />
-            ) : (
-              <Zap className="h-3 w-3" />
-            )}
-            {useAI ? "AI" : "Manual"}
-          </button>
 
-          {/* Text input + send */}
-          <div className="relative flex-1 flex items-center">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={
-                useAI
-                  ? "Tanya atau catat transaksi..."
-                  : "Tulis transaksi Bos (mode manual)..."
-              }
-              className="w-full rounded-full border border-stone-200 dark:border-zinc-800 px-4 py-2.5 pr-11 text-xs font-semibold shadow-3xs bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50 transition-colors"
-            />
+            {/* Toggle AI / Manual */}
             <button
-              onClick={() => handleSend()}
-              disabled={!input.trim()}
+              onClick={() => setUseAI((v) => !v)}
+              title={useAI ? "Mode AI — klik untuk ganti ke Manual" : "Mode Manual — klik untuk ganti ke AI"}
               className={cn(
-                "absolute right-1 flex h-8 w-8 items-center justify-center rounded-full text-white transition-all cursor-pointer",
-                input.trim()
-                  ? "bg-emerald-500 hover:bg-emerald-600 active:scale-95"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 pointer-events-none scale-90",
+                "flex shrink-0 items-center justify-center gap-1 px-2.5 h-10 rounded-full border text-[10px] font-extrabold tracking-wide transition-all duration-300 cursor-pointer active:scale-95 mb-0.5",
+                useAI
+                  ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15"
+                  : "bg-amber-400/10 border-amber-400/30 text-amber-600 dark:text-amber-400 hover:bg-amber-400/15",
               )}
             >
-              <Send className="h-3.5 w-3.5" />
+              {useAI ? (
+                <Sparkles className="h-3 w-3" />
+              ) : (
+                <Zap className="h-3 w-3" />
+              )}
+              <span className="hidden xs:inline">{useAI ? "AI" : "Manual"}</span>
             </button>
+
+            {/* Textarea + send button wrapper */}
+            <div className="relative flex-1 flex items-end">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                onFocus={() => {
+                  // Delay to let the virtual keyboard fully expand, then scroll to bottom
+                  setTimeout(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                  }, 300);
+                }}
+                placeholder={
+                  useAI
+                    ? "Tanya atau catat transaksi..."
+                    : "Tulis transaksi Bos (mode manual)..."
+                }
+                className="w-full resize-none rounded-2xl border border-stone-200 dark:border-zinc-800 pl-4 pr-11 py-2 text-xs font-semibold shadow-3xs bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50 transition-colors max-h-[120px] min-h-[38px] leading-relaxed overflow-y-auto"
+              />
+              <button
+                onClick={() => handleSend()}
+                disabled={!input.trim()}
+                className={cn(
+                  "absolute right-1 bottom-1 flex h-8 w-8 items-center justify-center rounded-full text-white transition-all cursor-pointer",
+                  input.trim()
+                    ? "bg-emerald-500 hover:bg-emerald-600 active:scale-95"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 pointer-events-none scale-90",
+                )}
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
